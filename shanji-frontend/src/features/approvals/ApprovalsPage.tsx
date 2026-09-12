@@ -1,7 +1,12 @@
 import { useEffect, useState } from "react";
-import { useParams, useNavigate } onClick={() => {
-      navigate(-1);
-    }} style={{ marginBottom: "24px" }}>← Back</button>
+import { useParams, useNavigate } from "react-router-dom";
+import { useAuth } from "../../contexts/AuthContext";
+import { supabase } from "../../lib/supabase";
+import { Card } from "../../components/Card";
+import { Loading, EmptyState } from "../../components/Loading";
+import { StatusBadge } from "../../components/StatusBadge";
+import { useToast } from "../../hooks/useToast";
+import { getTaskTransitionMatrix } from "../../lib/utils";
       <div style={styles.header}>
         <div>
           <h1>Approvals</h1>
