@@ -36,9 +36,11 @@ function MainLayout() {
     { name: "Reports", path: `/projects/${projectId}/reports` },
     { name: "Changes", path: `/projects/${projectId}/change-requests` },
     { name: "Handover", path: `/projects/${projectId}/handover` },
+    { name: "Activity", path: `/activity` },
   ] : [
     { name: "Dashboard", path: "/dashboard" },
     { name: "Projects", path: "/projects" },
+    { name: "Activity", path: "/activity" },
   ];
 
   return (

@@ -1,7 +1,6 @@
-import { createContext, useCallback, useContext, useEffect, useState } from 'react';
-import { supabase } from '../lib/supabase';
-import type { User } from '../types';
-
+import { createContext, useContext, useEffect, useState, useCallback } from "react";
+import { supabase } from "../lib/supabase";
+import type { User } from "../types";
 
 interface AuthContextType {
   user: User | null;
@@ -25,10 +24,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (session?.user) {
       setUser({
         id: session.user.id,
-        email: session.user.email ?? null as unknown as string,
+        email: (session.user.email ?? null) as unknown as string,
         full_name: session.user.user_metadata?.full_name ?? null,
         avatar_url: session.user.user_metadata?.avatar_url ?? null,
-        role: session.user.user_metadata?.role ?? 'member',
+        role: (session.user.user_metadata?.role ?? 'member') as string,
         organization_id: session.user.user_metadata?.organization_id ?? null,
         department: null,
       });
@@ -52,10 +51,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (session?.user) {
         setUser({
           id: session.user.id,
-        email: session.user.email ?? null as unknown as string,
+          email: (session.user.email ?? null) as unknown as string,
           full_name: session.user.user_metadata?.full_name ?? null,
           avatar_url: session.user.user_metadata?.avatar_url ?? null,
-          role: session.user.user_metadata?.role ?? 'member',
+          role: (session.user.user_metadata?.role ?? 'member') as string,
           organization_id: session.user.user_metadata?.organization_id ?? null,
           department: null,
         });
@@ -67,24 +66,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       setLoading(false);
     });
-    return () => subscription.unsubscribe();
+    return () => { subscription.unsubscribe(); };
   }, [loadUser]);
 
   const signIn = useCallback(async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
-    return { error: error };
+    return { error };
   }, []);
 
   const signUp = useCallback(async (email: string, password: string, fullName?: string) => {
     const { error } = await supabase.auth.signUp({
       email,
       password,
-      options: {
-        data: {
-          full_name: fullName,
-          role: 'member',
-        },
-      },
+      options: { data: { full_name: fullName, role: 'member' } },
     });
     return { error };
   }, []);
