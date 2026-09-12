@@ -133,6 +133,76 @@ function DependencyEngine() {
     }
   };
 
+  const pmOverrideDependency = async (taskId: string, reason: string) => {
+    if (!user) {
+      showToast("error", "You must be logged in to perform this action");
+      return false;
+    }
+
+    const isPM = user.project_roles && user.project_roles[id] === 'project_manager';
+    if (!isPM) {
+      showToast("error", "Only project managers can override dependency blocks");
+      return false;
+    }
+
+    if (!reason.trim()) {
+      showToast("error", "Please provide an override reason");
+      return false;
+    }
+
+    const { data: task } = await supabase
+      .from("workplan_items")
+      .select("id, status")
+      .eq("id", taskId)
+      .single();
+
+    if (!task) {
+      showToast("error", "Task not found");
+      return false;
+    }
+
+    if (task.status !== "blocked") {
+      showToast("error", "Only blocked tasks can be overridden");
+      return false;
+    }
+
+    const { error: updateError } = await supabase
+      .from("workplan_items")
+      .update({ status: "released" })
+      .eq("id", taskId);
+
+    if (updateError) {
+      showToast("error", "Failed to override dependency block");
+      return false;
+    }
+
+        await supabase
+          .from("activity_logs")
+          .insert({
+            project_id: id,
+            user_id: user?.id,
+            action: "dependency_override",
+            entity_type: "workplan_item",
+            entity_id: taskId,
+            details: `PM override: Blocked task ${taskId} released due to dependency block. Reason: ${reason}`,
+            created_at: new Date().toISOString(),
+          });
+
+      showToast("success", "Dependency block overridden. Task is now released.");
+      loadDependencies();
+      loadTasks();
+      evaluateDependencies();
+      return true;
+    };
+
+    const styles: Record<string, React.CSSProperties> = {
+      header: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '24px' },
+      grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))', gap: '16px' },
+      cardHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' },
+      label: { fontSize: '13px', fontWeight: 500, color: '#374151', display: 'block', marginBottom: '4px' },
+    };
+  };
+
   useEffect(() => {
     loadDependencies();
     evaluateDependencies();
