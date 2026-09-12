@@ -1,4 +1,4 @@
-# Shanji DNA Database Schema
+SHANJI DNA Database Schema
 
 ## Overview
 Shanji DNA is a professional project-operations and project-accountability platform designed for organizations managing complex projects involving multiple departments, field teams, contractors, procurement, finance, compliance, and management.
