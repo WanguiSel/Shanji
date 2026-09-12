@@ -1,3 +1,7 @@
+-- ============================================
+-- WORKPLAN VERSIONING - INITIAL CREATION
+-- ============================================
+
 CREATE TABLE IF NOT EXISTS workplan_history (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
@@ -38,8 +42,20 @@ CREATE POLICY "Project managers can view workplan history" ON workplan_history
     )
   );
 
--- PM can create versions
-CREATE POLICY "Project managers can create history" ON workplan_history
+-- Assistants can create drafts
+CREATE POLICY "Assistants can create drafts" ON workplan_history
+  FOR INSERT
+  WITH CHECK (
+    project_id IN (
+      SELECT project_id 
+      FROM project_members 
+      WHERE user_id = auth.uid() 
+      AND role IN ('project_assistant')
+    )
+  );
+
+-- PMs can create versions
+CREATE POLICY "Project managers can create versions" ON workplan_history
   FOR INSERT
   WITH CHECK (
     project_id IN (
@@ -50,16 +66,36 @@ CREATE POLICY "Project managers can create history" ON workplan_history
     )
   );
 
--- Only system/service can archive versions
-CREATE POLICY "System can archive workplan history" ON workplan_history
+-- PMs can edit their versions
+CREATE POLICY "Project managers can edit versions" ON workplan_history
   FOR UPDATE
-  USING (false);
+  USING (
+    project_id IN (
+      SELECT project_id 
+      FROM project_members 
+      WHERE user_id = auth.uid() 
+      AND role IN ('project_manager')
+    )
+  );
+
+-- Only PMs can archive versions (system trigger)
+CREATE POLICY "Project managers can archive versions" ON workplan_history
+  FOR UPDATE
+  WITH CHECK (
+    project_id IN (
+      SELECT project_id 
+      FROM project_members 
+      WHERE user_id = auth.uid() 
+      AND role IN ('project_manager')
+    )
+    AND is_archived = true
+  );
 
 -- ============================================
 -- TRIGGERS
 -- ============================================
 
-CREATE OR REPLACE FUNCTION archive_previous_versions()
+CREATE OR REPLACE FUNCTION archive_previous_versions_secure()
 RETURNS TRIGGER AS $$
 BEGIN
   UPDATE workplan_history
@@ -69,28 +105,23 @@ BEGIN
   WHERE project_id = NEW.project_id
     AND version_sequence < NEW.version_sequence
     AND is_archived = false
-    AND status = 'approved';
+    AND status = 'approved'
+    -- Security constraint: only archive if current user is PM
+    AND (NEW.project_id IN (
+      SELECT project_id 
+      FROM project_members 
+      WHERE user_id = auth.uid() 
+      AND role IN ('project_manager')
+    ));
   
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER trg_archive_previous_versions
+CREATE TRIGGER trg_archive_previous_versions_secure
   AFTER INSERT ON workplan_history
   FOR EACH ROW
-  EXECUTE FUNCTION archive_previous_versions();
-
-CREATE OR REPLACE FUNCTION update_workplan_updated_timestamp()
-RETURNS TRIGGER AS $$
-BEGIN
-  NEW.updated_at = NOW();
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
-CREATE TRIGGER trg_update_workplan_timestamp
-  BEFORE UPDATE ON workplans
-  FOR EACH ROW EXECUTE FUNCTION update_workplan_updated_timestamp();
+  EXECUTE FUNCTION archive_previous_versions_secure();
 
 -- ============================================
 -- CONSTRAINTS & POLICIES
@@ -101,81 +132,102 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_single_approved_workplan_per_project
   ON workplans(project_id)
   WHERE status = 'approved';
 
--- Immutable approved workplans: prevent updates to approved versions
+-- Approved workplans must be immutable
 CREATE POLICY "Approved workplans cannot be updated" ON workplans
   FOR UPDATE
   USING (
-    NOT (
-      project_id IN (
-        SELECT project_id 
-        FROM workplans 
-        WHERE id = workplans.id 
-        AND status = 'approved'
-      )
-    )
-    OR 
-    project_id IN (
-      SELECT project_id 
-      FROM project_members 
-      WHERE user_id = auth.uid() 
-      AND role IN ('project_manager')
+    NOT EXISTS (
+      SELECT 1 
+      FROM workplans w
+      WHERE w.id = workplans.id 
+      AND w.status = 'approved'
     )
   );
 
--- Allow PMs to create new versions even when one is approved
-CREATE POLICY "PM can create new workplan versions" ON workplans
+-- Assistants can edit draft workplans
+CREATE POLICY "Assistants can edit draft workplans" ON workplans
+  FOR UPDATE
+  USING (
+    status = 'draft'
+    AND EXISTS (
+      SELECT 1 
+      FROM project_members pm
+      WHERE pm.project_id = workplans.project_id
+      AND pm.user_id = auth.uid()
+      AND pm.role = 'project_assistant'
+    )
+  );
+
+-- PMs can create new versions
+CREATE POLICY "Project managers can create new workplan versions" ON workplans
   FOR INSERT
   WITH CHECK (
-    project_id IN (
-      SELECT project_id 
-      FROM project_members 
-      WHERE user_id = auth.uid() 
-      AND role IN ('project_manager')
+    EXISTS (
+      SELECT 1 
+      FROM project_members pm
+      WHERE pm.project_id = NEW.project_id
+      AND pm.user_id = auth.uid()
+      AND pm.role = 'project_manager'
     )
     AND (
       SELECT COUNT(*) FROM workplans WHERE project_id = NEW.project_id AND status = 'approved'
     ) <= 1
   );
 
--- Assistants can edit drafts
-CREATE POLICY "Assistants can edit drafts" ON workplans
+-- PMs can submit drafts for review
+CREATE POLICY "Project managers can submit workplans" ON workplans
   FOR UPDATE
   USING (
-    project_id IN (
-      SELECT project_id 
-      FROM project_members 
-      WHERE user_id = auth.uid() 
-      AND role IN ('project_assistant')
+    EXISTS (
+      SELECT 1 
+      FROM project_members pm
+      WHERE pm.project_id = workplans.project_id
+      AND pm.user_id = auth.uid()
+      AND pm.role = 'project_manager'
     )
     AND status = 'draft'
+  )
+  WITH CHECK (
+    status = 'submitted'
   );
 
--- Allow approval workflow for submitted/under_review workplans
-CREATE POLICY "Allow PM approval workflow" ON workplans
+-- PMs can approve submitted/under_review workplans
+CREATE POLICY "Project managers can approve workplans" ON workplans
   FOR UPDATE
   USING (
-    project_id IN (
-      SELECT project_id 
-      FROM project_members 
-      WHERE user_id = auth.uid() 
-      AND role IN ('project_manager')
+    EXISTS (
+      SELECT 1 
+      FROM project_members pm
+      WHERE pm.project_id = workplans.project_id
+      AND pm.user_id = auth.uid()
+      AND pm.role = 'project_manager'
     )
-    AND status IN ('submitted', 'under_review')
+    AND status = 'under_review'
+  )
+  WITH CHECK (
+    status = 'approved'
+    AND (
+      SELECT COUNT(*) FROM workplans w
+      WHERE w.project_id = workplans.project_id
+      AND w.status = 'approved'
+    ) <= 1
   );
 
--- Allow archiving previous approved version when approving new version
-CREATE POLICY "PM can archive previous approved version" ON workplans
+-- PMs can reject submitted/under_review workplans
+CREATE POLICY "Project managers can reject workplans" ON workplans
   FOR UPDATE
-  WITH CHECK (
-    project_id IN (
-      SELECT project_id 
-      FROM project_members 
-      WHERE user_id = auth.uid() 
-      AND role IN ('project_manager')
+  USING (
+    EXISTS (
+      SELECT 1 
+      FROM project_members pm
+      WHERE pm.project_id = workplans.project_id
+      AND pm.user_id = auth.uid()
+      AND pm.role = 'project_manager'
     )
-    AND (
-      SELECT COUNT(*) FROM workplans WHERE project_id = workplans.project_id AND status = 'approved'
-    ) <= 1
+    AND status = 'under_review'
+  )
+  WITH CHECK (
+    status = 'rejected'
   );
 
 -- ============================================
