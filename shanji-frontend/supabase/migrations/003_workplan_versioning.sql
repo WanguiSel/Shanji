@@ -2,6 +2,10 @@
 -- WORKPLAN VERSIONING - INITIAL CREATION
 -- ============================================
 
+-- ============================================
+-- WORKPLAN VERSIONING - FINAL AUDIT FIX
+-- ============================================
+
 CREATE TABLE IF NOT EXISTS workplan_history (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
@@ -30,7 +34,7 @@ CREATE TABLE IF NOT EXISTS workplan_history (
 
 ALTER TABLE workplan_history ENABLE ROW LEVEL SECURITY;
 
--- Only project managers can view history
+-- Only project managers can view all history
 CREATE POLICY "Project managers can view workplan history" ON workplan_history
   FOR SELECT
   USING (
@@ -42,8 +46,8 @@ CREATE POLICY "Project managers can view workplan history" ON workplan_history
     )
   );
 
--- Assistants can create drafts
-CREATE POLICY "Assistants can create drafts" ON workplan_history
+-- Assistants can create draft history only
+CREATE POLICY "Assistants can create draft history" ON workplan_history
   FOR INSERT
   WITH CHECK (
     project_id IN (
@@ -52,6 +56,7 @@ CREATE POLICY "Assistants can create drafts" ON workplan_history
       WHERE user_id = auth.uid() 
       AND role IN ('project_assistant')
     )
+    AND status = 'draft'
   );
 
 -- PMs can create versions
@@ -96,7 +101,7 @@ CREATE POLICY "Project managers can archive versions" ON workplan_history
 -- ============================================
 
 CREATE OR REPLACE FUNCTION archive_previous_versions_secure()
-RETURNS TRIGGER AS $$
+RETURNS TRIGGER AS $
 BEGIN
   UPDATE workplan_history
   SET is_archived = true,
@@ -116,7 +121,7 @@ BEGIN
   
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$ LANGUAGE plpgsql;
 
 CREATE TRIGGER trg_archive_previous_versions_secure
   AFTER INSERT ON workplan_history
