@@ -163,6 +163,7 @@ function Dashboard() {
             <span style={styles.logo}>Shanji</span><span style={styles.logoAccent}>DNA</span>
           </div>
           <p style={styles.subtitle}>Project Operations Command Centre</p>
+          <div style={styles.marker}>✅ SHANJI COMMAND CENTRE — NEW DASHBOARD</div>
         </div>
         <div style={styles.headerRight}>
           <div style={styles.greeting}>
@@ -502,6 +503,7 @@ const styles: Record<string, React.CSSProperties> = {
   logo: { fontSize: '28px', fontWeight: '700', color: '#0D3B2E', letterSpacing: '-0.02em' },
   logoAccent: { fontSize: '28px', fontWeight: '700', color: '#F59E0B' },
   subtitle: { fontSize: '14px', color: '#6B7280', margin: 0, fontWeight: 400 },
+  marker: { fontSize: '11px', fontWeight: 700, color: '#10B981', marginTop: '4px', padding: '2px 8px', background: '#ECFDF5', border: '1px solid #A7F3D0', borderRadius: '4px', display: 'inline-block', width: 'fit-content' },
   headerRight: { display: 'flex', alignItems: 'center', gap: '24px' },
   greeting: { display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '2px' },
   projectSelector: { display: 'flex', alignItems: 'center', gap: '8px' },
