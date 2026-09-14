@@ -48,7 +48,7 @@ function Dashboard() {
 
       const { data: activityData } = await supabase
         .from("activity_logs")
-        .select("*")
+        .select("action, entity_type, entity_id, description, metadata, created_at")
         .order("created_at", { ascending: false })
         .limit(10);
 
@@ -128,16 +128,19 @@ function Dashboard() {
     return 'Completed';
   };
 
-  const getDaysUntil = (dateStr: string | null) => {
+  const getDaysUntil = (dateStr: string | null | undefined) => {
     if (!dateStr) return null;
     const today = new Date(); today.setHours(0, 0, 0, 0);
     const target = new Date(dateStr); target.setHours(0, 0, 0, 0);
+    if (isNaN(target.getTime())) return null;
     return Math.ceil((target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
   };
 
-  const formatDate = (dateStr: string | null) => {
+  const formatDate = (dateStr: string | null | undefined) => {
     if (!dateStr) return '—';
-    return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    const date = new Date(dateStr);
+    if (isNaN(date.getTime())) return '—';
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   };
 
   const formatCurrency = (amount: number) => {
@@ -389,8 +392,8 @@ function Dashboard() {
                   <div style={styles.activityContent}>
                     <p style={styles.activityText}>
                       {log.action?.replace(/_/g, ' ') || 'Activity'} 
-                      {log.entity ? `on ${log.entity}` : ''}
-                      {log.metadata?.description ? ` — ${log.metadata.description}` : ''}
+                      {log.entity_type ? `on ${log.entity_type}` : ''}
+                      {log.description ? ` — ${log.description}` : ''}
                     </p>
                     <span style={styles.activityTime}>
                       {formatDate(log.created_at)}
@@ -477,7 +480,7 @@ function Dashboard() {
             <div style={styles.pmCard}>
               <p style={styles.pmLabel}>Budget Health</p>
               <p style={styles.pmValue}>
-                {currentProject.budget ? `${Math.round((totalSpend / currentProject.budget) * 100)}% utilized` : 'Budget not set'}
+                {currentProject.budget && currentProject.budget > 0 ? `${Math.round((totalSpend / currentProject.budget) * 100)}% utilized` : 'Budget not set'}
                 {pendingExpenses.filter(e => e.project_id === currentProject.id).length > 0 && ` • ${pendingExpenses.filter(e => e.project_id === currentProject.id).length} pending`}
               </p>
             </div>
