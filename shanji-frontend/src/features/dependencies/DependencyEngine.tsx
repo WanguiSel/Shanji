@@ -107,26 +107,27 @@ function DependencyEngine() {
           .update({ status: "released" })
           .eq("id", successorTask.id);
 
-        await supabase
-          .from("notifications")
-          .insert({
-            user_id: successorTask.responsible_user_id,
-            type: "dependency_released",
-            title: "Task Released",
-            message: `Task ${successorTask.id} is now available for work.",
-            data: { task_id: successorTask.id, project_id: id },
-            created_at: new Date().toISOString(),
-          });
+    await supabase
+      .from("notifications")
+      .insert({
+        user_id: successorTask.responsible_user_id,
+        type: "dependency_released",
+        title: "Task Released",
+        message: `Task ${successorTask.id} is now available for work`,
+        data: { task_id: successorTask.id, project_id: id },
+        created_at: new Date().toISOString(),
+      });
 
         await supabase
           .from("activity_logs")
           .insert({
             project_id: id,
-            user_id: user?.id || "unknown",
+            actor_id: user?.id || "unknown",
             action: "dependency_released",
             entity_type: "task_dependency",
             entity_id: dep.id,
-            details: `Task ${successorTask.id} released after dependency ${dep.task_id} was approved`,
+            description: `Task ${successorTask.id} released after dependency ${dep.task_id} was approved`,
+            metadata: {},
             created_at: new Date().toISOString(),
           });
       }
@@ -180,11 +181,12 @@ function DependencyEngine() {
       .from("activity_logs")
       .insert({
         project_id: id,
-        user_id: user?.id,
+        actor_id: user?.id,
         action: "dependency_override",
         entity_type: "workplan_item",
         entity_id: taskId,
-        details: `PM override: Blocked task ${taskId} released due to dependency block. Reason: ${reason}`,
+        description: `PM override: Blocked task ${taskId} released due to dependency block. Reason: ${reason}`,
+        metadata: {},
         created_at: new Date().toISOString(),
       });
 
@@ -200,7 +202,6 @@ function DependencyEngine() {
     grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))', gap: '16px' },
     cardHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' },
     label: { fontSize: '13px', fontWeight: 500, color: '#374151', display: 'block', marginBottom: '4px' },
-  };
   };
 
   useEffect(() => {

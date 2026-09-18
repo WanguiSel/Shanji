@@ -182,11 +182,12 @@ function WorkplanPage() {
         .from("activity_logs")
         .insert({
           project_id: id,
-          user_id: user?.id,
+          actor_id: user?.id,
           action: "workplan_submitted",
           entity_type: "workplan",
           entity_id: workplan.id,
-          details: `Workplan ${workplan.version} submitted for PM review`,
+          description: `Workplan ${workplan.version} submitted for PM review`,
+          metadata: {},
           created_at: new Date().toISOString(),
         });
 
@@ -231,11 +232,12 @@ function WorkplanPage() {
         .from("activity_logs")
         .insert({
           project_id: id,
-          user_id: user?.id,
+          actor_id: user?.id,
           action: "workplan_approved",
           entity_type: "workplan",
           entity_id: workplan.id,
-          details: `Workplan ${workplan.version} approved by PM. Reason: ${approveReason}`,
+          description: `Workplan ${workplan.version} approved by PM. Reason: ${approveReason}`,
+          metadata: {},
           created_at: new Date().toISOString(),
         });
 
@@ -267,11 +269,12 @@ function WorkplanPage() {
         .from("activity_logs")
         .insert({
           project_id: id,
-          user_id: user?.id,
+          actor_id: user?.id,
           action: "workplan_rejected",
           entity_type: "workplan",
           entity_id: workplan.id,
-          details: `Workplan ${workplan.version} rejected by PM. Reason: ${rejectReason}`,
+          description: `Workplan ${workplan.version} rejected by PM. Reason: ${rejectReason}`,
+          metadata: {},
           created_at: new Date().toISOString(),
         });
 
@@ -318,8 +321,7 @@ function WorkplanPage() {
                   Submit for Review
                 </button>
               )}
-              }
-              {canReviewWorkplan(workplan) && (
+              {canReviewWorkplan(workplan) && <>
                 <button
                   className="btn btn-primary"
                   onClick={() => setShowApproveModal(true)}
@@ -332,7 +334,7 @@ function WorkplanPage() {
                 >
                   Reject
                 </button>
-              )}
+              </>}
             </div>
           )}
 
@@ -354,7 +356,8 @@ function WorkplanPage() {
                           <span style={{ margin: "0 8px" }}>•</span>
                           <span>Created: {new Date(hist?.created_at).toLocaleString()}</span>
                           {hist?.approved_at && (
-                            <><n                              <span style={{ margin: "0 8px" }}>•</span>
+                             <>
+                              <span style={{ margin: "0 8px" }}>•</span>
                               <span>Approved: {new Date(hist?.approved_at).toLocaleString()}</span>
                             </>
                           )}
@@ -370,12 +373,12 @@ function WorkplanPage() {
                             onClick={() => { setSelectedHistory(hist); setShowEditDraftModal(true); setEditTitle(hist?.title); setEditDescription(hist?.description || ""); }}
                           >
                             Edit
-                          </button>
-                        )}
-                      </div>
+                </button>
+              )}
+                    </div>
                     </div>
                   </Card>
-                )}
+                ))}
               </div>
             )}
           </div>
@@ -422,6 +425,7 @@ function WorkplanPage() {
               ))}
             </div>
           )}
+         </div>
         </div>
       ) : (
         <Card>
@@ -475,6 +479,7 @@ function WorkplanPage() {
               <button className="btn btn-primary" onClick={() => submitForReview(workplan)}>Submit</button>
             </div>
           </div>
+        </div>
       )}
 
       {showApproveModal && (
@@ -516,6 +521,7 @@ function WorkplanPage() {
               <button className="btn btn-secondary" style={{ color: "#DC2626", borderColor: "#FECACA" }} onClick={() => rejectWorkplan(workplan)}>Reject</button>
             </div>
           </div>
+        </div>
       )}
 
       {showEditDraftModal && (
