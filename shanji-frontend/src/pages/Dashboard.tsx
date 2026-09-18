@@ -2,20 +2,23 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../contexts/AuthContext";
-import { Card, StatCard } from "../components/Card";
+import { useProject } from "../contexts/ProjectContext";
+import { StatCard } from "../components/Card";
 import { StatusBadge } from "../components/StatusBadge";
 import { Loading, EmptyState } from "../components/Loading";
 
 function Dashboard() {
   const { user, profile, hasRole } = useAuth();
+  const { currentProject, setCurrentProject } = useProject();
   const navigate = useNavigate();
+  const isPM = hasRole("project_manager") || hasRole("admin");
+
   const [projects, setProjects] = useState<any[]>([]);
   const [risks, setRisks] = useState<any[]>([]);
   const [tasks, setTasks] = useState<any[]>([]);
   const [approvals, setApprovals] = useState<any[]>([]);
-  const [expenses, setExpenses] = useState<any[]>([]);
-  const [procurement, setProcurement] = useState<any[]>([]);
   const [evidence, setEvidence] = useState<any[]>([]);
+  const [procurement, setProcurement] = useState<any[]>([]);
   const [activityLogs, setActivityLogs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -23,113 +26,123 @@ function Dashboard() {
 
   async function loadDashboard() {
     try {
-      const { data: projectsData } = await supabase.from("projects").select("*").order("created_at", { ascending: false });
-      const { data: risksData } = await supabase.from("risks").select("*").order("created_at", { ascending: false });
-      const { data: tasksData } = await supabase.from("workplan_items").select("*").order("created_at", { ascending: false });
-      const { data: approvalsData } = await supabase.from("approvals").select("*").order("requested_at", { ascending: false });
-      const { data: expensesData } = await supabase.from("expenses").select("*").order("expense_date", { ascending: false });
-      const { data: procurementData } = await supabase.from("procurement_requests").select("*").order("created_at", { ascending: false });
-      const { data: evidenceData } = await supabase.from("evidence_records").select("*").order("created_at", { ascending: false });
-      const { data: activityData } = await supabase.from("activity_logs").select("action, entity_type, entity_id, description, metadata, created_at").order("created_at", { ascending: false }).limit(10);
-      setProjects((projectsData || []) as any[]);
-      setRisks((risksData || []) as any[]);
-      setTasks((tasksData || []) as any[]);
-      setApprovals((approvalsData || []) as any[]);
-      setExpenses((expensesData || []) as any[]);
-      setProcurement((procurementData || []) as any[]);
-      setEvidence((evidenceData || []) as any[]);
-      setActivityLogs((activityData || []) as any[]);
+      const [pR, rR, tR, aR, eR, prR, acR] = await Promise.all([
+        supabase.from("projects").select("*").order("created_at", { ascending: false }),
+        supabase.from("risks").select("*").order("created_at", { ascending: false }),
+        supabase.from("workplan_items").select("*").order("created_at", { ascending: false }),
+        supabase.from("approvals").select("*").order("requested_at", { ascending: false }),
+        supabase.from("evidence_records").select("*").order("created_at", { ascending: false }),
+        supabase.from("procurement_requests").select("*").order("created_at", { ascending: false }),
+        supabase.from("activity_logs").select("id,project_id,actor_id,action,entity_type,entity_id,description,metadata,created_at").order("created_at", { ascending: false }).limit(20),
+      ]);
+      setProjects((pR.data || []) as any[]);
+      setRisks((rR.data || []) as any[]);
+      setTasks((tR.data || []) as any[]);
+      setApprovals((aR.data || []) as any[]);
+      setEvidence((eR.data || []) as any[]);
+      setProcurement((prR.data || []) as any[]);
+      setActivityLogs((acR.data || []) as any[]);
     } catch (err) { console.error("Dashboard error:", err); }
     setLoading(false);
   }
 
   if (loading) return <Loading message="Loading Project Operations Command Centre..." />;
 
-  const isPM = hasRole('project_manager') || hasRole('admin');
-  const currentProject = projects.find((p: any) => p.status === 'active') || projects[0];
+  // --- GLOBAL METRICS ---
+  const activeProjects = projects.filter((p: any) => p.status === "active");
+  const openRisks = risks.filter((r: any) => r.status === "open");
+  const criticalRisks = openRisks.filter((r: any) => r.risk_score >= 17);
+  const highRisks = openRisks.filter((r: any) => r.risk_score >= 10 && r.risk_score < 17);
+  const pendingApprovals = approvals.filter((a: any) => a.status === "pending");
+  const overdueTasks = tasks.filter((t: any) => t.end_date && new Date(t.end_date) < new Date() && t.status !== "completed" && t.status !== "verified" && t.status !== "approved");
+  const dueSoonTasks = tasks.filter((t: any) => {
+    if (!t.end_date) return false;
+    const d = new Date(t.end_date); const now = new Date();
+    now.setHours(0,0,0,0); const dd = new Date(d); dd.setHours(0,0,0,0);
+    const diff = (dd.getTime() - now.getTime()) / (1000*60*60*24);
+    return diff >= 0 && diff <= 7 && t.status !== "completed" && t.status !== "verified" && t.status !== "approved";
+  });
+  const evidencePending = evidence.filter((e: any) => e.verification_status === "pending" || e.verification_status === "correction_requested");
 
-  const healthyProjects = projects.filter((p: any) => p.health === "green");
-  const atRiskProjects = projects.filter((p: any) => p.health === "amber");
-  const unhealthyProjects = projects.filter((p: any) => p.health === "red");
+  const overallProgress = activeProjects.length > 0 ? Math.round(activeProjects.reduce((s, p) => s + (p.progress || 0), 0) / activeProjects.length) : 0;
 
-  const totalTasks = tasks.length;
-  const inProgressTasks = tasks.filter((t: any) => t.status === 'in_progress' || t.status === 'planned');
-  const completedTasks = tasks.filter((t: any) => t.status === 'completed' || t.status === 'verified' || t.status === 'approved');
-  const overdueTasks = tasks.filter((t: any) => t.end_date && new Date(t.end_date) < new Date() && t.status !== 'completed' && t.status !== 'verified' && t.status !== 'approved');
-  const blockedTasks = tasks.filter((t: any) => t.status === 'blocked');
+  // --- PROJECT HEALTH ---
+  const getProjectRisks = (pid: string) => risks.filter((r: any) => r.project_id === pid && r.status === "open");
+  const getProjectOverdue = (pid: string) => tasks.filter((t: any) => t.project_id === pid && t.end_date && new Date(t.end_date) < new Date() && t.status !== "completed" && t.status !== "verified" && t.status !== "approved");
+  const getProjectPendingApprovals = (pid: string) => approvals.filter((a: any) => a.project_id === pid && a.status === "pending");
+  const getProjectProgress = (pid: string) => { const projs = projects.filter((p: any) => p.id === pid); return projs.length > 0 ? (projs[0].progress || 0) : 0; };
+  const getProjectHealth = (pid: string) => { const projs = projects.filter((p: any) => p.id === pid); return projs.length > 0 ? projs[0].health : "green"; };
 
-  const pendingApprovals = approvals.filter((a: any) => a.status === 'pending');
-  const recentApprovals = approvals.filter((a: any) => a.status !== 'pending').slice(0, 5);
-
-  const openRisks = risks.filter((r: any) => r.status === 'open');
-  const criticalRisks = risks.filter((r: any) => r.status === 'open' && r.risk_score >= 17);
-  const highRisks = risks.filter((r: any) => r.status === 'open' && r.risk_score >= 10 && r.risk_score < 17);
-
-  const totalSpend = expenses.reduce((sum: number, e: any) => sum + Number(e.amount || 0), 0);
-  const pendingExpenses = expenses.filter((e: any) => e.approval_status === 'pending');
-
-  const procurementActive = procurement.filter((p: any) => p.status !== 'completed' && p.status !== 'closed');
-  const evidencePending = evidence.filter((e: any) => e.verification_status === 'pending' || e.verification_status === 'correction_requested');
-
-  const upcomingTasks = tasks
-    .filter((t: any) => t.end_date && new Date(t.end_date) >= new Date() && t.status !== 'completed' && t.status !== 'verified' && t.status !== 'approved')
-    .sort((a: any, b: any) => new Date(a.end_date).getTime() - new Date(b.end_date).getTime())
-    .slice(0, 5);
-
-  const needsAttention = [
-    ...overdueTasks.slice(0, 3).map((t: any) => ({ type: 'overdue', item: t, label: t.task_title || 'Untitled', reason: 'Overdue', date: t.end_date, navigate: `/projects/${t.project_id}/tasks` })),
-    ...blockedTasks.slice(0, 3).map((t: any) => ({ type: 'blocked', item: t, label: t.task_title || 'Untitled', reason: 'Blocked', date: t.end_date, navigate: `/projects/${t.project_id}/tasks` })),
-    ...pendingApprovals.slice(0, 3).map((a: any) => ({ type: 'approval', item: a, label: a.title || 'Pending approval', reason: 'Awaiting decision', date: a.requested_at, navigate: `/projects/${a.project_id}/approvals` })),
-    ...criticalRisks.slice(0, 2).map((r: any) => ({ type: 'risk', item: r, label: r.risk_title || 'Risk', reason: 'Critical risk', date: r.due_date, navigate: `/projects/${r.project_id}/risks` })),
-    ...procurementActive.filter((p: any) => p.priority === 'critical' || p.priority === 'high').slice(0, 2).map((p: any) => ({ type: 'procurement', item: p, label: p.title || 'Procurement', reason: `${p.priority} priority procurement`, date: p.expected_delivery_date, navigate: `/projects/${p.project_id}/procurement` })),
-    ...evidencePending.slice(0, 2).map((e: any) => ({ type: 'evidence', item: e, label: e.title || 'Evidence', reason: 'Awaiting verification', date: e.created_at, navigate: `/projects/${e.project_id}/evidence` })),
-  ].sort((a: any, b: any) => {
-    const dateA = a.date ? new Date(a.date).getTime() : 0;
-    const dateB = b.date ? new Date(b.date).getTime() : 0;
-    return dateA - dateB;
-  }).slice(0, 8);
-
-  const currentProjectProgress = currentProject ? currentProject.progress || 0 : 0;
-  const currentProjectStatus = currentProject ? currentProject.status : 'No active project';
-  const currentProjectHealth = currentProject ? currentProject.health : 'unknown';
-
-  const getScheduleState = (project: any) => {
-    if (!project.start_date || !project.end_date) return 'Not set';
-    const start = new Date(project.start_date); const end = new Date(project.end_date); const today = new Date();
-    if (today < start) return 'Upcoming';
-    if (today > end && project.status !== 'closed' && project.status !== 'closure') return 'Overdue';
-    if (today >= start && today <= end) return 'In Progress';
-    return 'Completed';
+  const getLatestActivity = (pid: string) => {
+    const logs = activityLogs.filter((l: any) => l.project_id === pid);
+    if (logs.length === 0) return null;
+    return logs[0];
   };
 
-  const getDaysUntil = (dateStr: string | null | undefined) => {
-    if (!dateStr) return null;
-    const today = new Date(); today.setHours(0, 0, 0, 0);
-    const target = new Date(dateStr); target.setHours(0, 0, 0, 0);
+  // --- UPCOMING & OVERDUE ---
+  const upcomingOverdue = tasks
+    .filter((t: any) => t.end_date && t.status !== "completed" && t.status !== "verified" && t.status !== "approved")
+    .map((t: any) => { const d = new Date(t.end_date); const now = new Date(); now.setHours(0,0,0,0); const dd = new Date(d); dd.setHours(0,0,0,0); const diff = Math.ceil((dd.getTime() - now.getTime()) / (1000*60*60*24)); return { ...t, daysUntil: diff }; })
+    .sort((a: any, b: any) => a.daysUntil - b.daysUntil)
+    .slice(0, 8);
+
+  // --- ATTENTION ITEMS ---
+  const attentionItems = [
+    ...overdueTasks.slice(0, 3).map((t: any) => ({ type: "overdue", label: t.task_title || "Task", reason: "Overdue", date: t.end_date, navigate: `/projects/${t.project_id}/tasks` })),
+    ...criticalRisks.slice(0, 2).map((r: any) => ({ type: "risk", label: r.risk_title || "Risk", reason: "Critical risk", date: r.due_date, navigate: `/projects/${r.project_id}/risks` })),
+    ...pendingApprovals.slice(0, 3).map((a: any) => ({ type: "approval", label: a.title || "Approval", reason: "Awaiting decision", date: a.requested_at, navigate: `/projects/${a.project_id}/approvals` })),
+    ...evidencePending.slice(0, 2).map((e: any) => ({ type: "evidence", label: e.title || "Evidence", reason: "Awaiting verification", date: e.created_at, navigate: `/projects/${e.project_id}/evidence` })),
+    ...procurement.filter((p: any) => {
+      const s = p.status;
+      const pr = p.priority;
+      return (s === "pending" || s === "review" || s === "quotations") && (pr === "critical" || pr === "high");
+    }).slice(0, 2).map((p: any) => ({ type: "procurement", label: p.title || "Procurement", reason: `${p.priority} priority`, date: p.expected_delivery_date || p.created_at, navigate: `/projects/${p.project_id}/procurement` })),
+  ].sort((a: any, b: any) => (a.date ? new Date(a.date).getTime() : 0) - (b.date ? new Date(b.date).getTime() : 0));
+
+  // --- PM INTELLIGENCE ---
+  const pmOverdueCount = overdueTasks.length;
+  const pmCriticalRisks = criticalRisks.length;
+  const pmPendingApprovals = pendingApprovals.length;
+  const pmEvidenceGaps = evidencePending.length;
+  const pmTasksDueSoon = dueSoonTasks.length;
+
+  // --- FORMATTERS ---
+  const formatDate = (s: string | null | undefined) => {
+    if (!s) return "—";
+    const d = new Date(s);
+    if (isNaN(d.getTime())) return "—";
+    return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  };
+
+  const getDaysUntil = (s: string | null | undefined) => {
+    if (!s) return null;
+    const today = new Date(); today.setHours(0,0,0,0);
+    const target = new Date(s); target.setHours(0,0,0,0);
     if (isNaN(target.getTime())) return null;
-    return Math.ceil((target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-  };
-
-  const formatDate = (dateStr: string | null | undefined) => {
-    if (!dateStr) return '—';
-    const date = new Date(dateStr);
-    if (isNaN(date.getTime())) return '—';
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-  };
-
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-KE', { style: 'currency', currency: 'KES', minimumFractionDigits: 0 }).format(amount);
+    return Math.ceil((target.getTime() - today.getTime()) / (1000*60*60*24));
   };
 
   const getGreeting = () => {
-    const hour = new Date().getHours();
-    if (hour < 12) return 'Good morning';
-    if (hour < 17) return 'Good afternoon';
-    return 'Good evening';
+    const h = new Date().getHours();
+    if (h < 12) return "Good morning";
+    if (h < 17) return "Good afternoon";
+    return "Good evening";
   };
+
+  // --- HELPERS ---
+  const healthColor = (h: string) => h === "green" ? "#10B981" : h === "amber" ? "#F59E0B" : "#DC2626";
+  const healthLabel = (h: string) => h === "green" ? "Healthy" : h === "amber" ? "Attention" : "Critical";
+
+  const renderHealth = (h: string) => (
+    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+      <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: healthColor(h), flexShrink: 0 }} />
+      <span style={{ fontSize: "12px", fontWeight: 600, color: healthColor(h) }}>{healthLabel(h)}</span>
+    </div>
+  );
 
   return (
     <div style={styles.container}>
+      {/* HEADER */}
       <header style={styles.header}>
         <div style={styles.headerLeft}>
           <div style={styles.brand}>
@@ -139,18 +152,15 @@ function Dashboard() {
         </div>
         <div style={styles.headerRight}>
           <div style={styles.greeting}>
+            <span style={styles.greetingRole}>{profile?.role === "project_manager" ? "PM" : profile?.role === "admin" ? "Admin" : "Member"}</span>
             <span>{getGreeting()},</span>
-            <strong>{user?.full_name || 'Project Manager'}</strong>
+            <strong>{user?.full_name || "User"}</strong>
           </div>
           {projects.length > 1 && (
             <div style={styles.projectSelector}>
-              <span style={styles.selectorLabel}>Current Project:</span>
-              <select
-                style={styles.select}
-                value={currentProject?.id || ''}
-                onChange={(e) => navigate(`/projects/${e.target.value}`)}
-              >
-                {projects.map(p => (
+              <span style={styles.selectorLabel}>Project:</span>
+              <select style={styles.select} value={currentProject?.id || ""} onChange={(e) => { const p = projects.find((x: any) => x.id === e.target.value); if (p) setCurrentProject(p); }}>
+                {projects.map((p: any) => (
                   <option key={p.id} value={p.id}>{p.project_name}</option>
                 ))}
               </select>
@@ -159,294 +169,191 @@ function Dashboard() {
         </div>
       </header>
 
-      {currentProject && (
-        <section style={styles.healthSection}>
-          <div style={styles.healthCard}>
-            <div style={styles.healthMain}>
-              <div style={styles.healthStatus}>
-                <div style={{
-                  ...styles.healthIndicator,
-                  background: currentProjectHealth === 'green' ? '#10B981' :
-                             currentProjectHealth === 'amber' ? '#F59E0B' : '#DC2626'
-                }} />
-                <div>
-                  <h2 style={styles.healthTitle}>{currentProject.project_name}</h2>
-                  <p style={styles.healthSubtitle}>Project Status: {currentProjectStatus} • Schedule: {getScheduleState(currentProject)}</p>
-                </div>
-              </div>
-              <div style={styles.healthProgress}>
-                <div style={styles.progressRing}>
-                  <svg width="120" height="120">
-                    <circle cx="60" cy="60" r="54" stroke="#E5E7EB" strokeWidth="8" fill="none" />
-                    <circle
-                      cx="60" cy="60" r="54"
-                      stroke={currentProjectHealth === 'green' ? '#10B981' : currentProjectHealth === 'amber' ? '#F59E0B' : '#DC2626'}
-                      strokeWidth="8"
-                      fill="none"
-                      strokeDasharray={`${2 * Math.PI * 54 * (currentProjectProgress / 100)} ${2 * Math.PI * 54}`}
-                      strokeLinecap="round"
-                      transform="rotate(-90 60 60)"
-                    />
-                    <text x="60" y="68" textAnchor="middle" style={styles.progressText}>{Math.round(currentProjectProgress)}%</text>
-                  </svg>
-                </div>
-                <div style={styles.progressDetails}>
-                  <p style={styles.progressLabel}>Overall Completion</p>
-                  <p style={styles.progressValue}>{Math.round(currentProjectProgress)}%</p>
-                </div>
-              </div>
-            </div>
-            <div style={styles.healthMeta}>
-              <div style={styles.metaItem}>
-                <span style={styles.metaLabel}>Tasks</span>
-                <span style={styles.metaValue}>
-                  {completedTasks.filter((t: any) => t.project_id === currentProject?.id).length} / {tasks.filter((t: any) => t.project_id === currentProject?.id).length} completed
-                </span>
-              </div>
-              <div style={styles.metaItem}>
-                <span style={styles.metaLabel}>Schedule</span>
-                <span style={styles.metaValue}>
-                  {currentProject?.start_date && currentProject?.end_date
-                    ? `${formatDate(currentProject.start_date)} — ${formatDate(currentProject.end_date)}`
-                    : 'Dates not set'}
-                </span>
-              </div>
-              <div style={styles.metaItem}>
-                <span style={styles.metaLabel}>Budget</span>
-                <span style={styles.metaValue}>
-                  {currentProject?.budget ? formatCurrency(currentProject.budget) : 'Not set'}
-                </span>
-              </div>
-              <div style={styles.metaItem}>
-                <span style={styles.metaLabel}>Client</span>
-                <span style={styles.metaValue}>{currentProject?.client_name || 'Not specified'}</span>
-              </div>
-            </div>
-          </div>
-        </section>
-      )}
-
-      <section style={styles.metricsSection}>
-        <div style={styles.metricsGrid}>
-          <StatCard title="Total Projects" value={projects.length} color="#1F2937" subtitle={currentProject ? `${tasks.filter((t: any) => t.project_id === currentProject.id).length} tasks in current project` : ''} />
-          <StatCard title="Total Tasks" value={totalTasks} color="#3B82F6" subtitle={currentProject ? `${tasks.filter((t: any) => t.project_id === currentProject.id).length} in current project` : ''} />
-          <StatCard title="In Progress" value={inProgressTasks.length} color="#3B82F6" subtitle={currentProject ? `${inProgressTasks.filter((t: any) => t.project_id === currentProject.id).length} active` : ''} />
-          <StatCard title="Completed" value={completedTasks.length} color="#10B981" subtitle={currentProject ? `${completedTasks.filter((t: any) => t.project_id === currentProject.id).length} done` : ''} />
-          <StatCard title="Overdue" value={overdueTasks.length} color="#DC2626" subtitle={currentProject ? `${overdueTasks.filter((t: any) => t.project_id === currentProject.id).length} need action` : ''} />
-          <StatCard title="Blocked" value={blockedTasks.length} color="#F59E0B" subtitle={currentProject ? `${blockedTasks.filter((t: any) => t.project_id === currentProject.id).length} awaiting deps` : ''} />
-          <StatCard title="Pending Approvals" value={pendingApprovals.length} color="#8B5CF6" subtitle={currentProject ? `${pendingApprovals.filter((a: any) => a.project_id === currentProject.id).length} pending` : ''} />
-          <StatCard title="Open Risks" value={openRisks.length} color="#EF4444" subtitle={criticalRisks.length > 0 ? `${criticalRisks.length} critical` : ''} />
-          <StatCard title="Project Spend" value={formatCurrency(totalSpend)} color="#059669" subtitle={pendingExpenses.length > 0 ? `${pendingExpenses.length} pending` : ''} />
+      {/* KPI CARDS */}
+      <section style={styles.kpiSection}>
+        <div style={styles.kpiGrid}>
+          <StatCard title="Active Projects" value={activeProjects.length} color="#1F2937" subtitle={`${projects.length} total`} />
+          <StatCard title="Overall Progress" value={`${overallProgress}%`} color="#3B82F6" />
+          <StatCard title="Open Risks" value={openRisks.length} color="#EF4444" subtitle={criticalRisks.length > 0 ? `${criticalRisks.length} critical` : ""} />
+          <StatCard title="Pending Approvals" value={pendingApprovals.length} color="#8B5CF6" />
+          <StatCard title="Tasks Due Soon" value={dueSoonTasks.length} color="#F59E0B" />
+          <StatCard title="Overdue Tasks" value={overdueTasks.length} color="#DC2626" />
+          <StatCard title="Evidence Pending" value={evidencePending.length} color="#EC4899" />
         </div>
       </section>
 
+      {/* PROJECT HEALTH GRID */}
+      <section style={styles.section}>
+        <h3 style={styles.sectionTitle}>Project Health</h3>
+        {projects.length > 0 ? (
+          <div style={styles.projectGrid}>
+            {projects.slice(0, 6).map((p: any) => {
+              const pRisks = getProjectRisks(p.id);
+              const pOverdue = getProjectOverdue(p.id);
+              const pPending = getProjectPendingApprovals(p.id);
+              const pProgress = getProjectProgress(p.id);
+              const pHealth = getProjectHealth(p.id);
+              const latest = getLatestActivity(p.id);
+              return (
+                <div key={p.id} style={styles.projectCard} onClick={() => navigate(`/projects/${p.id}`)}>
+                  <div style={styles.projectCardHeader}>
+                    <div style={styles.projectCardName}>{p.project_name}</div>
+                    {renderHealth(pHealth)}
+                  </div>
+                  <div style={styles.projectCardBody}>
+                    <div style={styles.projectMetric}>
+                      <span style={styles.projectMetricLabel}>Progress</span>
+                      <div style={styles.miniProgressBg}><div style={{ ...styles.miniProgressFill, width: `${pProgress}%`, background: healthColor(pHealth) }} /></div>
+                      <span style={styles.projectMetricValue}>{pProgress}%</span>
+                    </div>
+                    <div style={styles.projectMetricsRow}>
+                      <span style={styles.projectMetricSmall}>{pRisks.length} risks</span>
+                      <span style={styles.projectMetricSmall}>{pOverdue.length} overdue</span>
+                      <span style={styles.projectMetricSmall}>{pPending.length} pending</span>
+                    </div>
+                    {latest && (
+                      <div style={styles.projectLatestActivity}>
+                        <span style={styles.projectLatestLabel}>Latest:</span>
+                        <span style={styles.projectLatestText}>{latest.action?.replace(/_/g, " ") || "Activity"}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <EmptyState title="No projects yet" message="Projects will appear here once they are created." />
+        )}
+      </section>
+
+      {/* ATTENTION REQUIRED */}
+      <section style={styles.section}>
+        <h3 style={styles.sectionTitle}>Attention Required</h3>
+        {attentionItems.length > 0 ? (
+          <div style={styles.attentionList}>
+            {attentionItems.map((item, i) => (
+              <div key={i} style={styles.attentionItem} onClick={() => item.navigate && navigate(item.navigate)}>
+                <div style={{ ...styles.attentionDot, background: item.type === "overdue" ? "#DC2626" : item.type === "risk" ? "#EF4444" : item.type === "approval" ? "#8B5CF6" : item.type === "evidence" ? "#EC4899" : item.type === "procurement" ? "#F59E0B" : "#3B82F6" }} />
+                <div style={styles.attentionContent}>
+                  <p style={styles.attentionLabel}>{item.label}</p>
+                  <p style={styles.attentionReason}>{item.reason}</p>
+                </div>
+                <span style={styles.attentionDate}>{item.type === "overdue" ? "Overdue" : item.type === "risk" ? "At risk" : "Pending"}</span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div style={styles.emptyState}>
+            <p>Nothing requiring immediate attention.</p>
+          </div>
+        )}
+      </section>
+
       <div style={styles.twoColumn}>
+        {/* PROJECT PROGRESS */}
         <section style={styles.panel}>
           <h3 style={styles.panelTitle}>Project Progress</h3>
           {currentProject ? (
             <div>
               <div style={styles.progressBarContainer}>
-                <div style={styles.progressBarBg}>
-                  <div
-                    style={{
-                      ...styles.progressBarFill,
-                      width: `${currentProjectProgress}%`,
-                      background: currentProjectHealth === 'green' ? '#10B981' : currentProjectHealth === 'amber' ? '#F59E0B' : '#DC2626'
-                    }}
-                  />
-                </div>
-                <div style={styles.progressLabels}>
-                  <span>0%</span>
-                  <span style={{ color: '#6B7280' }}>{Math.round(currentProjectProgress)}%</span>
-                  <span>100%</span>
-                </div>
+                <div style={styles.progressBarBg}><div style={{ ...styles.progressBarFill, width: `${currentProject.progress || 0}%`, background: healthColor(currentProject.health || "green") }} /></div>
+                <div style={styles.progressLabels}><span>0%</span><span style={{ color: "#6B7280" }}>{Math.round(currentProject.progress || 0)}%</span><span>100%</span></div>
               </div>
               <p style={styles.progressNote}>
-                {completedTasks.filter((t: any) => t.project_id === currentProject!.id).length} of {tasks.filter((t: any) => t.project_id === currentProject!.id).length} tasks completed
-                {((project?: typeof currentProject) => { const endDate: string = project?.end_date || ''; const days: number = getDaysUntil(endDate) || 0; return endDate ? ` • ${days >= 0 ? `${days} days remaining` : 'Past end date'}` : null; })(currentProject)}
+                {currentProject.project_name} &bull; {formatDate(currentProject.start_date)} &mdash; {formatDate(currentProject.end_date)}
               </p>
             </div>
           ) : (
-            <div style={styles.emptyState}>
-              <p>No active project selected. Choose a project from the selector above.</p>
-            </div>
+            <EmptyState title="No active project" message="Select a project to view progress." />
           )}
         </section>
 
+        {/* UPCOMING & OVERDUE */}
         <section style={styles.panel}>
-          <h3 style={styles.panelTitle}>Needs Attention</h3>
-          {needsAttention.length > 0 ? (
-            <div style={styles.attentionList}>
-              {needsAttention.map((item, index) => (
-                <div key={index} style={styles.attentionItem} onClick={() => item.navigate && navigate(item.navigate)}>
-                  <div style={{
-                    ...styles.attentionDot,
-                    background: item.type === 'overdue' ? '#DC2626' :
-                               item.type === 'blocked' ? '#F59E0B' :
-                               item.type === 'approval' ? '#8B5CF6' :
-                               item.type === 'risk' ? '#EF4444' :
-                               item.type === 'procurement' ? '#F59E0B' :
-                               '#3B82F6'
-                  }} />
-                  <div style={styles.attentionContent}>
-                    <p style={styles.attentionLabel}>{item.label}</p>
-                    <p style={styles.attentionReason}>{item.reason}</p>
-                  </div>
-                  {item.date && (
-                    <span style={styles.attentionDate}>
-                      {(() => { const d = item.date!; const days = getDaysUntil(d); return days !== null && days < 0 ? `${Math.abs(days || 0)}d overdue` : days !== null ? `${days}d left` : formatDate(d); })()}
-                    </span>
-                  )}
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div style={styles.emptyState}>
-              <p>No items requiring immediate attention. All systems nominal.</p>
-            </div>
-          )}
-        </section>
-      </div>
-
-      <div style={styles.twoColumn}>
-        <section style={styles.panel}>
-          <h3 style={styles.panelTitle}>Upcoming</h3>
-          {upcomingTasks.length > 0 ? (
+          <h3 style={styles.panelTitle}>Upcoming & Overdue</h3>
+          {upcomingOverdue.length > 0 ? (
             <div style={styles.upcomingList}>
-              {upcomingTasks.map((task) => (
-                <div key={task.id} style={styles.upcomingItem} onClick={() => navigate(`/projects/${task.project_id}/tasks`)}>
-                  <div style={styles.upcomingDate}>
-                    <span style={styles.upcomingDay}>
-                      {getDaysUntil(task.end_date) !== null ? `${getDaysUntil(task.end_date)}d` : '—'}
-                    </span>
-                    <span style={styles.upcomingMonth}>
-                      {formatDate(task.end_date).split(' ')[0]}
-                    </span>
+              {upcomingOverdue.map((t: any) => {
+                const days = t.daysUntil;
+                const isOverdue = days !== null && days < 0;
+                const isToday = days !== null && days === 0;
+                return (
+                  <div key={t.id} style={styles.upcomingItem} onClick={() => navigate(`/projects/${t.project_id}/tasks`)}>
+                    <div style={{ ...styles.upcomingDate, background: isOverdue ? "#DC2626" : isToday ? "#F59E0B" : "#0D3B2E" }}>
+                      <span style={styles.upcomingDay}>{isOverdue ? `${Math.abs(days)}d` : days === 0 ? "Today" : `${days}d`}</span>
+                    </div>
+                    <div style={styles.upcomingContent}>
+                      <p style={styles.upcomingTitle}>{t.task_title}</p>
+                      <p style={styles.upcomingMeta}>
+                        <StatusBadge status={t.status} />
+                        {isOverdue && <span style={{ color: "#DC2626", fontSize: "11px", fontWeight: 600 }}> OVERDUE</span>}
+                      </p>
+                    </div>
                   </div>
-                  <div style={styles.upcomingContent}>
-                    <p style={styles.upcomingTitle}>{task.task_title}</p>
-                    <p style={styles.upcomingMeta}>
-                      <StatusBadge status={task.status} />
-                      {task.responsible_user_id && ' • Assigned'}
-                    </p>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           ) : (
-            <div style={styles.emptyState}>
-              <p>No upcoming deadlines.</p>
-            </div>
-          )}
-        </section>
-
-        <section style={styles.panel}>
-          <h3 style={styles.panelTitle}>Recent Activity</h3>
-          {activityLogs.length > 0 ? (
-            <div style={styles.activityList}>
-              {activityLogs.map((log, index) => (
-                <div key={index} style={styles.activityItem}>
-                  <div style={styles.activityIcon}>
-                    {log.action === 'task_created' ? '+' :
-                     log.action === 'task_updated' ? 'edit' :
-                     log.action === 'status_changed' ? '=>' :
-                     log.action === 'approval_submitted' ? 'A' :
-                     log.action === 'approval_approved' ? 'appr' :
-                     log.action === 'evidence_uploaded' ? 'E' :
-                     log.action === 'workplan_updated' ? 'W' : '•'}
-                  </div>
-                  <div style={styles.activityContent}>
-                    <p style={styles.activityText}>
-                      {log.action?.replace(/_/g, ' ') || 'Activity'}
-                      {log.entity_type ? ` on ${log.entity_type}` : ''}
-                      {log.description ? ` — ${log.description}` : ''}
-                    </p>
-                    <span style={styles.activityTime}>
-                      {formatDate(log.created_at)}
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div style={styles.emptyState}>
-              <p>No recent activity recorded.</p>
-            </div>
+            <EmptyState title="No upcoming deadlines" message="Tasks will appear here once they are scheduled." />
           )}
         </section>
       </div>
 
-      {currentProject && (
-        <section style={styles.snapshotSection}>
-          <h3 style={styles.panelTitle}>Project Snapshot</h3>
-          <div style={styles.snapshotGrid}>
-            <div style={styles.snapshotCard}>
-              <p style={styles.snapshotLabel}>Project Name</p>
-              <p style={styles.snapshotValue}>{currentProject.project_name}</p>
-            </div>
-            <div style={styles.snapshotCard}>
-              <p style={styles.snapshotLabel}>PM</p>
-              <p style={styles.snapshotValue}>{currentProject.pm_user_id ? 'Assigned' : 'Not assigned'}</p>
-            </div>
-            <div style={styles.snapshotCard}>
-              <p style={styles.snapshotLabel}>Status</p>
-              <p style={styles.snapshotValue}><StatusBadge status={currentProject.status} /></p>
-            </div>
-            <div style={styles.snapshotCard}>
-              <p style={styles.snapshotLabel}>Health</p>
-              <p style={styles.snapshotValue}><StatusBadge status={currentProject.health} /></p>
-            </div>
-            <div style={styles.snapshotCard}>
-              <p style={styles.snapshotLabel}>Start Date</p>
-              <p style={styles.snapshotValue}>{formatDate(currentProject.start_date)}</p>
-            </div>
-            <div style={styles.snapshotCard}>
-              <p style={styles.snapshotLabel}>Expected Completion</p>
-              <p style={styles.snapshotValue}>{formatDate(currentProject.end_date)}</p>
-            </div>
-            <div style={styles.snapshotCard}>
-              <p style={styles.snapshotLabel}>Current Completion</p>
-              <p style={styles.snapshotValue}>{Math.round(currentProjectProgress)}%</p>
-            </div>
-            <div style={styles.snapshotCard}>
-              <p style={styles.snapshotLabel}>Client</p>
-              <p style={styles.snapshotValue}>{currentProject.client_name || 'Not specified'}</p>
-            </div>
+      {/* RECENT ACTIVITY */}
+      <section style={styles.section}>
+        <h3 style={styles.sectionTitle}>Recent Activity</h3>
+        {activityLogs.length > 0 ? (
+          <div style={styles.activityList}>
+            {activityLogs.slice(0, 10).map((log: any, i: number) => (
+              <div key={log.id || i} style={styles.activityItem}>
+                <div style={styles.activityIcon}>
+                  {log.action === "task_created" ? "+" : log.action === "task_updated" ? "~" : log.action === "status_changed" ? "=" : log.action === "approval" ? "A" : log.action?.charAt(0).toUpperCase() || "."}
+                </div>
+                <div style={styles.activityContent}>
+                  <p style={styles.activityText}>
+                    {log.action?.replace(/_/g, " ") || "Activity"}
+                    {log.entity_type ? ` on ${log.entity_type}` : ""}
+                    {log.description ? ` — ${log.description}` : ""}
+                  </p>
+                  <span style={styles.activityTime}>{formatDate(log.created_at)}</span>
+                </div>
+              </div>
+            ))}
           </div>
-        </section>
-      )}
+        ) : (
+          <EmptyState title="No recent activity" message="Activity will be recorded here once work begins." />
+        )}
+      </section>
 
-      {isPM && currentProject && (
+      {/* PM INTELLIGENCE */}
+      {isPM && (
         <section style={styles.pmSection}>
           <h3 style={styles.panelTitle}>PM Operational Intelligence</h3>
           <div style={styles.pmGrid}>
             <div style={styles.pmCard}>
-              <p style={styles.pmLabel}>Team Workload</p>
-              <p style={styles.pmValue}>
-                {inProgressTasks.filter((t: any) => t.project_id === currentProject.id).length} active tasks
-                {blockedTasks.filter((t: any) => t.project_id === currentProject.id).length > 0 && ` • ${blockedTasks.filter((t: any) => t.project_id === currentProject.id).length} blocked`}
-              </p>
+              <p style={styles.pmLabel}>Overdue Work</p>
+              <p style={styles.pmValue}>{pmOverdueCount} overdue tasks</p>
             </div>
             <div style={styles.pmCard}>
-              <p style={styles.pmLabel}>Risk Exposure</p>
-              <p style={styles.pmValue}>
-                {criticalRisks.filter((r: any) => r.project_id === currentProject.id).length} critical
-                {highRisks.filter((r: any) => r.project_id === currentProject.id).length > 0 && ` • ${highRisks.filter((r: any) => r.project_id === currentProject.id).length} high`}
-              </p>
+              <p style={styles.pmLabel}>Risks Requiring Attention</p>
+              <p style={styles.pmValue}>{pmCriticalRisks} critical, {highRisks.length} high</p>
             </div>
             <div style={styles.pmCard}>
-              <p style={styles.pmLabel}>Approval Bottlenecks</p>
-              <p style={styles.pmValue}>
-                {pendingApprovals.filter((a: any) => a.project_id === currentProject.id).length} pending
-                {pendingApprovals.filter((a: any) => a.project_id === currentProject.id && new Date(a.requested_at) < new Date(Date.now() - 3*24*60*60*1000)).length > 0 && ` • ${pendingApprovals.filter((a: any) => a.project_id === currentProject.id && new Date(a.requested_at) < new Date(Date.now() - 3*24*60*60*1000)).length} >3 days`}
-              </p>
+              <p style={styles.pmLabel}>Approvals Waiting</p>
+              <p style={styles.pmValue}>{pmPendingApprovals} pending</p>
             </div>
             <div style={styles.pmCard}>
-              <p style={styles.pmLabel}>Budget Health</p>
-              <p style={styles.pmValue}>
-                {currentProject.budget && currentProject.budget > 0 ? `${Math.round((totalSpend / currentProject.budget) * 100)}% utilized` : 'Budget not set'}
-                {pendingExpenses.filter((e: any) => e.project_id === currentProject.id).length > 0 && ` • ${pendingExpenses.filter((e: any) => e.project_id === currentProject.id).length} pending`}
-              </p>
+              <p style={styles.pmLabel}>Evidence Gaps</p>
+              <p style={styles.pmValue}>{pmEvidenceGaps} pending verification</p>
+            </div>
+            <div style={styles.pmCard}>
+              <p style={styles.pmLabel}>Tasks Due Soon</p>
+              <p style={styles.pmValue}>{pmTasksDueSoon} within 7 days</p>
+            </div>
+            <div style={styles.pmCard}>
+              <p style={styles.pmLabel}>Active Progress</p>
+              <p style={styles.pmValue}>{overallProgress}% overall</p>
             </div>
           </div>
         </section>
@@ -456,136 +363,72 @@ function Dashboard() {
 }
 
 const styles: Record<string, React.CSSProperties> = {
-  container: { padding: '24px', maxWidth: '1400px', margin: '0 auto' },
-  header: {
-    display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start',
-    marginBottom: '32px', paddingBottom: '20px', borderBottom: '1px solid #E5E7EB'
-  },
-  headerLeft: { display: 'flex', flexDirection: 'column', gap: '4px' },
-  brand: { display: 'flex', alignItems: 'baseline', gap: '4px' },
-  logo: { fontSize: '28px', fontWeight: '700', color: '#0D3B2E', letterSpacing: '-0.02em' },
-  logoAccent: { fontSize: '28px', fontWeight: '700', color: '#F59E0B' },
-  subtitle: { fontSize: '14px', color: '#6B7280', margin: 0, fontWeight: 400 },
-  headerRight: { display: 'flex', alignItems: 'center', gap: '24px' },
-  greeting: { display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '2px' },
-  projectSelector: { display: 'flex', alignItems: 'center', gap: '8px' },
-  selectorLabel: { fontSize: '13px', color: '#6B7280' },
-  select: {
-    padding: '8px 12px', borderRadius: '6px', border: '1px solid #D1D5DB',
-    fontSize: '14px', background: 'white', minWidth: '220px'
-  },
-  healthSection: { marginBottom: '32px' },
-  healthCard: {
-    background: 'white', borderRadius: '16px', border: '1px solid #E5E7EB',
-    padding: '24px', display: 'flex', flexDirection: 'column', gap: '24px'
-  },
-  healthMain: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '32px' },
-  healthStatus: { display: 'flex', alignItems: 'center', gap: '16px', flex: 1 },
-  healthIndicator: { width: '16px', height: '16px', borderRadius: '50%', flexShrink: 0 },
-  healthTitle: { fontSize: '24px', fontWeight: '700', color: '#1F2937', margin: '0 0 4px' },
-  healthSubtitle: { fontSize: '14px', color: '#6B7280', margin: 0 },
-  healthProgress: { display: 'flex', alignItems: 'center', gap: '24px' },
-  progressRing: { flexShrink: 0 },
-  progressText: { fontSize: '20px', fontWeight: '700', fill: '#1F2937', dominantBaseline: 'central' },
-  progressDetails: { display: 'flex', flexDirection: 'column', gap: '4px' },
-  progressLabel: { fontSize: '13px', color: '#6B7280', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' },
-  progressValue: { fontSize: '28px', fontWeight: '700', color: '#1F2937', margin: 0 },
-  healthMeta: {
-    display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px',
-    paddingTop: '16px', borderTop: '1px solid #E5E7EB'
-  },
-  metaItem: { display: 'flex', flexDirection: 'column', gap: '4px' },
-  metaLabel: { fontSize: '11px', color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.05em' },
-  metaValue: { fontSize: '14px', fontWeight: 500, color: '#374151' },
-  metricsSection: { marginBottom: '32px' },
-  metricsGrid: {
-    display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
-    gap: '16px'
-  },
-  twoColumn: {
-    display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '24px',
-    marginBottom: '32px'
-  },
-  panel: {
-    background: 'white', borderRadius: '12px', border: '1px solid #E5E7EB',
-    padding: '24px', minHeight: '280px'
-  },
-  panelTitle: {
-    fontSize: '16px', fontWeight: '600', color: '#1F2937',
-    margin: '0 0 20px', display: 'flex', alignItems: 'center', gap: '8px'
-  },
-  emptyState: {
-    padding: '40px 24px', textAlign: 'center', color: '#9CA3AF',
-    background: '#F9FAFB', borderRadius: '8px', border: '1px dashed #D1D5DB'
-  },
-  progressBarContainer: { display: 'flex', flexDirection: 'column', gap: '8px' },
-  progressBarBg: { height: '12px', background: '#E5E7EB', borderRadius: '6px', overflow: 'hidden' },
-  progressBarFill: { height: '100%', borderRadius: '6px', transition: 'width 0.3s ease' },
-  progressLabels: { display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#9CA3AF' },
-  progressNote: { fontSize: '13px', color: '#6B7280', margin: '12px 0 0' },
-  attentionList: { display: 'flex', flexDirection: 'column', gap: '12px' },
-  attentionItem: {
-    display: 'flex', alignItems: 'center', gap: '12px',
-    padding: '12px 16px', background: '#F9FAFB', borderRadius: '8px',
-    border: '1px solid #E5E7EB', cursor: 'pointer'
-  },
-  attentionDot: { width: '10px', height: '10px', borderRadius: '50%', flexShrink: 0 },
+  container: { padding: "24px", maxWidth: "1400px", margin: "0 auto", background: "#F9FAFB", minHeight: "100vh" },
+  header: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "28px", paddingBottom: "16px", borderBottom: "1px solid #E5E7EB" },
+  headerLeft: { display: "flex", flexDirection: "column", gap: "2px" },
+  brand: { display: "flex", alignItems: "baseline", gap: "4px" },
+  logo: { fontSize: "26px", fontWeight: "700", color: "#0D3B2E", letterSpacing: "-0.02em" },
+  logoAccent: { fontSize: "26px", fontWeight: "700", color: "#F59E0B" },
+  subtitle: { fontSize: "13px", color: "#6B7280", margin: 0, fontWeight: 400 },
+  headerRight: { display: "flex", alignItems: "center", gap: "20px" },
+  greeting: { display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "2px" },
+  greetingRole: { fontSize: "10px", fontWeight: 700, color: "#F59E0B", textTransform: "uppercase", letterSpacing: "0.08em" },
+  projectSelector: { display: "flex", alignItems: "center", gap: "8px" },
+  selectorLabel: { fontSize: "12px", color: "#6B7280" },
+  select: { padding: "6px 10px", borderRadius: "6px", border: "1px solid #D1D5DB", fontSize: "13px", background: "white", minWidth: "180px" },
+  kpiSection: { marginBottom: "28px" },
+  kpiGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: "14px" },
+  section: { marginBottom: "28px" },
+  sectionTitle: { fontSize: "15px", fontWeight: "600", color: "#1F2937", margin: "0 0 16px" },
+  projectGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: "16px" },
+  projectCard: { background: "white", borderRadius: "10px", border: "1px solid #E5E7EB", padding: "16px", cursor: "pointer", transition: "box-shadow 0.15s", textDecoration: "none", color: "inherit" },
+  projectCardHeader: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "12px" },
+  projectCardName: { fontSize: "14px", fontWeight: "600", color: "#1F2937", flex: 1, marginRight: "8px" },
+  projectCardBody: { display: "flex", flexDirection: "column", gap: "8px" },
+  projectMetric: { display: "flex", alignItems: "center", gap: "8px" },
+  projectMetricLabel: { fontSize: "11px", color: "#9CA3AF", minWidth: "50px" },
+  miniProgressBg: { flex: 1, height: "6px", background: "#E5E7EB", borderRadius: "3px", overflow: "hidden" },
+  miniProgressFill: { height: "100%", borderRadius: "3px" },
+  projectMetricValue: { fontSize: "12px", fontWeight: "600", color: "#374151", minWidth: "32px", textAlign: "right" as const },
+  projectMetricsRow: { display: "flex", gap: "12px" },
+  projectMetricSmall: { fontSize: "11px", color: "#6B7280" },
+  projectLatestActivity: { display: "flex", gap: "4px", marginTop: "4px" },
+  projectLatestLabel: { fontSize: "10px", color: "#9CA3AF" },
+  projectLatestText: { fontSize: "11px", color: "#6B7280", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const },
+  attentionList: { display: "flex", flexDirection: "column", gap: "8px" },
+  attentionItem: { display: "flex", alignItems: "center", gap: "12px", padding: "12px 16px", background: "white", borderRadius: "8px", border: "1px solid #E5E7EB", cursor: "pointer" },
+  attentionDot: { width: "8px", height: "8px", borderRadius: "50%", flexShrink: 0 },
   attentionContent: { flex: 1, minWidth: 0 },
-  attentionLabel: { fontSize: '14px', fontWeight: 500, color: '#1F2937', margin: '0 0 2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
-  attentionReason: { fontSize: '12px', color: '#6B7280', margin: 0 },
-  attentionDate: { fontSize: '12px', fontWeight: 500, color: '#DC2626', whiteSpace: 'nowrap' },
-  upcomingList: { display: 'flex', flexDirection: 'column', gap: '12px' },
-  upcomingItem: {
-    display: 'flex', alignItems: 'center', gap: '16px',
-    padding: '12px 16px', background: '#F9FAFB', borderRadius: '8px',
-    border: '1px solid #E5E7EB', cursor: 'pointer'
-  },
-  upcomingDate: {
-    display: 'flex', flexDirection: 'column', alignItems: 'center',
-    background: '#0D3B2E', color: 'white', padding: '8px 12px',
-    borderRadius: '8px', minWidth: '56px'
-  },
-  upcomingDay: { fontSize: '18px', fontWeight: '700', lineHeight: 1 },
-  upcomingMonth: { fontSize: '11px', opacity: 0.8, textTransform: 'uppercase' },
+  attentionLabel: { fontSize: "13px", fontWeight: 600, color: "#1F2937", margin: "0 0 2px", whiteSpace: "nowrap" as const, overflow: "hidden", textOverflow: "ellipsis" },
+  attentionReason: { fontSize: "12px", color: "#6B7280", margin: 0 },
+  attentionDate: { fontSize: "11px", fontWeight: 600, color: "#DC2626", whiteSpace: "nowrap" as const, padding: "2px 8px", background: "#FEF2F2", borderRadius: "4px" } as React.CSSProperties,
+  emptyState: { padding: "32px 24px", textAlign: "center" as const, color: "#9CA3AF", background: "white", borderRadius: "8px", border: "1px dashed #D1D5DB" },
+  twoColumn: { display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "20px", marginBottom: "28px" },
+  panel: { background: "white", borderRadius: "10px", border: "1px solid #E5E7EB", padding: "20px", minHeight: "240px" },
+  panelTitle: { fontSize: "14px", fontWeight: "600", color: "#1F2937", margin: "0 0 16px" },
+  progressBarContainer: { display: "flex", flexDirection: "column", gap: "6px" },
+  progressBarBg: { height: "10px", background: "#E5E7EB", borderRadius: "5px", overflow: "hidden" },
+  progressBarFill: { height: "100%", borderRadius: "5px", transition: "width 0.3s ease" },
+  progressLabels: { display: "flex", justifyContent: "space-between", fontSize: "10px", color: "#9CA3AF" },
+  progressNote: { fontSize: "12px", color: "#6B7280", margin: "8px 0 0" },
+  upcomingList: { display: "flex", flexDirection: "column", gap: "8px" },
+  upcomingItem: { display: "flex", alignItems: "center", gap: "12px", padding: "10px 14px", background: "white", borderRadius: "8px", border: "1px solid #E5E7EB", cursor: "pointer" },
+  upcomingDate: { display: "flex", alignItems: "center", justifyContent: "center", color: "white", padding: "6px 10px", borderRadius: "6px", minWidth: "44px", height: "44px", textAlign: "center" as const },
+  upcomingDay: { fontSize: "14px", fontWeight: "700", lineHeight: 1.2 },
   upcomingContent: { flex: 1 },
-  upcomingTitle: { fontSize: '14px', fontWeight: '500', color: '#1F2937', margin: '0 0 2px' },
-  upcomingMeta: { fontSize: '12px', color: '#6B7280', margin: 0 },
-  activityList: { display: 'flex', flexDirection: 'column', gap: '12px' },
-  activityItem: {
-    display: 'flex', alignItems: 'flex-start', gap: '12px',
-    padding: '12px 16px', background: '#F9FAFB', borderRadius: '8px',
-    border: '1px solid #E5E7EB'
-  },
-  activityIcon: {
-    width: '32px', height: '32px', borderRadius: '8px',
-    background: '#EFF6FF', color: '#3B82F6', display: 'flex',
-    alignItems: 'center', justifyContent: 'center', fontSize: '14px', flexShrink: 0
-  },
+  upcomingTitle: { fontSize: "13px", fontWeight: 500, color: "#1F2937", margin: "0 0 2px", whiteSpace: "nowrap" as const, overflow: "hidden", textOverflow: "ellipsis" },
+  upcomingMeta: { fontSize: "11px", color: "#6B7280", margin: 0, display: "flex", alignItems: "center", gap: "6px" } as React.CSSProperties,
+  activityList: { display: "flex", flexDirection: "column", gap: "8px" },
+  activityItem: { display: "flex", alignItems: "flex-start", gap: "10px", padding: "10px 14px", background: "white", borderRadius: "8px", border: "1px solid #E5E7EB" },
+  activityIcon: { width: "28px", height: "28px", borderRadius: "6px", background: "#EFF6FF", color: "#3B82F6", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "12px", fontWeight: 700, flexShrink: 0 },
   activityContent: { flex: 1 },
-  activityText: { fontSize: '13px', color: '#374151', margin: '0 0 4px', lineHeight: 1.4 },
-  activityTime: { fontSize: '11px', color: '#9CA3AF' },
-  snapshotSection: { marginBottom: '32px' },
-  snapshotGrid: {
-    display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
-    gap: '16px'
-  },
-  snapshotCard: {
-    background: 'white', borderRadius: '12px', border: '1px solid #E5E7EB',
-    padding: '20px', display: 'flex', flexDirection: 'column', gap: '8px'
-  },
-  snapshotLabel: { fontSize: '11px', color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.05em', margin: 0 },
-  snapshotValue: { fontSize: '14px', fontWeight: 500, color: '#374151', margin: 0 },
-  pmSection: {
-    background: '#FEF3C7', borderRadius: '12px', border: '1px solid #FCD34D',
-    padding: '24px', marginTop: '24px'
-  },
-  pmGrid: { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px' },
-  pmCard: {
-    background: 'white', borderRadius: '10px', border: '1px solid #FDE68A',
-    padding: '16px', display: 'flex', flexDirection: 'column', gap: '8px'
-  },
-  pmLabel: { fontSize: '12px', color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.05em', margin: 0 },
-  pmValue: { fontSize: '14px', fontWeight: 500, color: '#374151', margin: 0 },
+  activityText: { fontSize: "12px", color: "#374151", margin: "0 0 3px", lineHeight: 1.4 },
+  activityTime: { fontSize: "10px", color: "#9CA3AF" },
+  pmSection: { background: "#FEF3C7", borderRadius: "10px", border: "1px solid #FCD34D", padding: "20px", marginTop: "4px" },
+  pmGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: "12px" },
+  pmCard: { background: "white", borderRadius: "8px", border: "1px solid #FDE68A", padding: "12px" },
+  pmLabel: { fontSize: "10px", color: "#9CA3AF", textTransform: "uppercase" as const, letterSpacing: "0.05em", margin: "0 0 4px" },
+  pmValue: { fontSize: "13px", fontWeight: 600, color: "#374151", margin: 0 },
 };
 
 export default Dashboard;
