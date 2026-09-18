@@ -16,6 +16,7 @@ function WorkplanPage() {
   const [history, setHistory] = useState<any[]>([]);
   const [tasks, setTasks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [showCreateVersionModal, setShowCreateVersionModal] = useState(false);
   const [newVersionTitle, setNewVersionTitle] = useState("");
   const [newVersionDescription, setNewVersionDescription] = useState("");
@@ -78,37 +79,52 @@ function WorkplanPage() {
 
   const loadWorkplan = async () => {
     if (!id) return;
-    const { data: wpData } = await supabase
-      .from("workplans")
-      .select("*, projects(project_name)")
-      .eq("project_id", id)
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .single();
-    if (wpData) {
-      setWorkplan(wpData as any);
-      loadHistory(wpData.id);
-      loadTasks(wpData.id);
+    setError(null);
+    try {
+      const { data: wpData, error: wpError } = await supabase
+        .from("workplans")
+        .select("*, projects(project_name)")
+        .eq("project_id", id)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .single();
+      if (wpError) throw wpError;
+      if (wpData) {
+        setWorkplan(wpData as any);
+        loadHistory(wpData.id);
+        loadTasks(wpData.id);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load workplan");
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const loadHistory = async (workplanId: string) => {
-    const { data } = await supabase
-      .from("workplan_history")
-      .select("*")
-      .eq("project_id", id)
-      .order("version_sequence", { ascending: false });
-    setHistory(data || []);
+    try {
+      const { data } = await supabase
+        .from("workplan_history")
+        .select("*")
+        .eq("project_id", id)
+        .order("version_sequence", { ascending: false });
+      setHistory(data || []);
+    } catch (err) {
+      console.error("Failed to load history:", err);
+    }
   };
 
   const loadTasks = async (workplanId: string) => {
-    const { data } = await supabase
-      .from("workplan_items")
-      .select("*")
-      .eq("workplan_id", workplanId)
-      .order("sort_order");
-    setTasks((data || []) as any[]);
+    try {
+      const { data } = await supabase
+        .from("workplan_items")
+        .select("*")
+        .eq("workplan_id", workplanId)
+        .order("sort_order");
+      setTasks((data || []) as any[]);
+    } catch (err) {
+      console.error("Failed to load tasks:", err);
+    }
   };
 
   const createNewVersion = async () => {
@@ -288,13 +304,20 @@ function WorkplanPage() {
   };
 
   useEffect(() => {
+    setError(null);
     loadWorkplan();
   }, [id]);
 
-
   if (loading) return <Loading />;
-
-
+  if (error) return (
+    <Card>
+      <div style={{ textAlign: 'center', padding: '48px 24px' }}>
+        <p style={{ fontSize: '16px', fontWeight: 500, color: '#DC2626', marginBottom: '12px' }}>Error loading workplan</p>
+        <p style={{ fontSize: '14px', color: '#6B7280', marginBottom: '16px' }}>{error}</p>
+        <button className="btn btn-primary" onClick={loadWorkplan}>Retry</button>
+      </div>
+    </Card>
+  );
 
   return (
     <div>
@@ -385,7 +408,7 @@ function WorkplanPage() {
 
           <div style={{ marginBottom: "24px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <h2 style={{ fontSize: "18px", fontWeight: 600 }}>Tasks</h2>
-            <button className="btn btn-primary" onClick={() => navigate(`/projects/${workplan?.project_id}/tasks/new`)}>+ New Task</button>
+            <button className="btn btn-primary" onClick={() => navigate(`/projects/${workplan?.project_id}/tasks`)}>+ New Task</button>
           </div>
 
           {tasks.length === 0 ? (
@@ -414,7 +437,7 @@ function WorkplanPage() {
                       <div style={{ marginTop: "8px" }}>
                         <button
                           className="btn btn-sm btn-secondary"
-                          onClick={() => navigate(`/projects/${workplan?.project_id}/tasks/${task?.id}/edit`)}
+                          onClick={() => navigate(`/projects/${workplan?.project_id}/tasks`)}
                         >
                           Edit
                         </button>

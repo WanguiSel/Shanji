@@ -15,6 +15,7 @@ function TasksPage() {
   const { toasts, showToast, removeToast } = useToast();
   const [tasks, setTasks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newTaskTitle, setNewTaskTitle] = useState("");
   const [newTaskPriority, setNewTaskPriority] = useState("medium");
@@ -26,20 +27,41 @@ function TasksPage() {
 
   const loadTasks = async () => {
     if (!id) return;
-    const { data: wpData } = await supabase.from("workplans").select("id").eq("project_id", id);
-    if (!wpData?.length) {
-      setTasks([]);
+    setError(null);
+    try {
+      const { data: wpData } = await supabase.from("workplans").select("id").eq("project_id", id);
+      if (!wpData?.length) {
+        setTasks([]);
+        setLoading(false);
+        return;
+      }
+      const wpIds = wpData.map((w) => w.id);
+      const { data, error: qError } = await supabase
+        .from("workplan_items")
+        .select("*")
+        .in("workplan_id", wpIds)
+        .order("sort_order");
+      if (qError) throw qError;
+      setTasks((data || []) as any[]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load tasks");
+    } finally {
       setLoading(false);
-      return;
     }
-    const wpIds = wpData.map((w) => w.id);
-    const { data } = await supabase
-      .from("workplan_items")
-      .select("*")
-      .in("workplan_id", wpIds)
-      .order("sort_order");
-    setTasks((data || []) as any[]);
-    setLoading(false);
+  };
+
+  const logActivity = async (action: string, description: string) => {
+    if (!id || !user?.id) return;
+    await supabase.from("activity_logs").insert({
+      project_id: id,
+      actor_id: user.id,
+      action,
+      entity_type: "workplan_item",
+      entity_id: "",
+      description,
+      metadata: {},
+      created_at: new Date().toISOString(),
+    }).then(({ error }) => { if (error) console.error("Activity log failed:", error); });
   };
 
   const createTask = async () => {
@@ -77,6 +99,7 @@ function TasksPage() {
       setNewTaskResponsibleRole("");
       setNewTaskResponsibleUser("");
       showToast("success", "Task created");
+      await logActivity("task_created", `Task "${newTaskTitle.trim()}" created`);
       loadTasks();
     } else {
       showToast("error", "Failed to create task");
@@ -84,7 +107,7 @@ function TasksPage() {
   };
 
   const updateTask = async (taskId: string, updates: Partial<any>) => {
-    const { error } = await supabase
+    const { data: taskData, error } = await supabase
       .from("workplan_items")
       .update(updates)
       .eq("id", taskId)
@@ -93,6 +116,7 @@ function TasksPage() {
 
     if (!error) {
       showToast("success", "Task updated");
+      await logActivity("task_updated", `Task "${taskData?.task_title || taskId}" updated`);
       loadTasks();
       return true;
     } else {
@@ -102,13 +126,16 @@ function TasksPage() {
   };
 
   const deleteTask = async (taskId: string) => {
-    const { error } = await supabase
+    const { data: taskData, error } = await supabase
       .from("workplan_items")
       .delete()
-      .eq("id", taskId);
+      .eq("id", taskId)
+      .select()
+      .single();
 
     if (!error) {
       showToast("success", "Task deleted");
+      await logActivity("task_deleted", `Task "${taskData?.task_title || taskId}" deleted`);
       loadTasks();
       return true;
     } else {
@@ -133,10 +160,20 @@ function TasksPage() {
   };
 
   useEffect(() => {
+    setError(null);
     loadTasks();
   }, [id]);
 
   if (loading) return <Loading />;
+  if (error) return (
+    <Card>
+      <div style={{ textAlign: 'center', padding: '48px 24px' }}>
+        <p style={{ fontSize: '16px', fontWeight: 500, color: '#DC2626', marginBottom: '12px' }}>Error loading tasks</p>
+        <p style={{ fontSize: '14px', color: '#6B7280', marginBottom: '16px' }}>{error}</p>
+        <button className="btn btn-primary" onClick={loadTasks}>Retry</button>
+      </div>
+    </Card>
+  );
 
   return (
     <div>

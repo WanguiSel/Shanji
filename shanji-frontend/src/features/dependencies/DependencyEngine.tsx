@@ -16,30 +16,41 @@ function DependencyEngine() {
   const { toasts, showToast } = useToast();
   const [dependencies, setDependencies] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [selectedDependency, setSelectedDependency] = useState<any>(null);
   const [showModal, setShowModal] = useState(false);
   const [overrideReason, setOverrideReason] = useState("");
 
   const loadDependencies = async () => {
     if (!id) return;
-    const { data } = await supabase
-      .from("task_dependencies")
-      .select("*, workplan_items(*)")
-      .eq("project_id", id)
-      .order("created_at", { ascending: false });
-    setDependencies((data || []) as any[]);
-    setLoading(false);
+    setError(null);
+    try {
+      const { data: depData } = await supabase
+        .from("task_dependencies")
+        .select("*, workplan_items(*)")
+        .order("created_at", { ascending: false });
+      const filtered = (depData || []).filter((d: any) =>
+        d.workplan_items?.[0]?.project_id === id
+      );
+      setDependencies(filtered);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load dependencies");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const loadTasks = async () => {
     if (!id) return;
-    const { data } = await supabase
-      .from("workplan_items")
-      .select("*")
-      .eq("project_id", id)
-      .order("sort_order");
-    setDependencies((data || []) as any[]);
-    setLoading(false);
+    try {
+      const { data: wpData, error: wpError } = await supabase.from("workplans").select("id").eq("project_id", id);
+      if (wpError || !wpData?.length) return;
+      const wpIds = wpData.map((w) => w.id);
+      const { data } = await supabase.from("workplan_items").select("*").in("workplan_id", wpIds).order("sort_order");
+      setDependencies((data || []) as any[]);
+    } catch (err) {
+      console.error("Failed to load tasks:", err);
+    }
   };
 
   const createDependency = async (dependencyData: any) => {
@@ -100,10 +111,12 @@ function DependencyEngine() {
       .select("id, status, responsible_user_id, priority")
       .eq("project_id", id);
 
-    const { data: dependencies } = await supabase
+    const { data: allDeps } = await supabase
       .from("task_dependencies")
       .select("id, task_id, dependent_task_id, mandatory")
-      .eq("project_id", id);
+      .order("created_at", { ascending: false });
+    const dependencyIds = tasks?.map((t: any) => t.id) || [];
+    const dependencies = (allDeps || []).filter((d: any) => dependencyIds.includes(d.task_id));
 
     for (const dep of dependencies || []) {
       const predecessorTask = tasks?.find((t) => t.id === dep.task_id);
@@ -126,7 +139,8 @@ function DependencyEngine() {
         type: "dependency_released",
         title: "Task Released",
         message: `Task ${successorTask.id} is now available for work`,
-        data: { task_id: successorTask.id, project_id: id },
+        related_object_type: "workplan_item",
+        related_object_id: successorTask.id,
         created_at: new Date().toISOString(),
       });
 
@@ -217,11 +231,21 @@ function DependencyEngine() {
   };
 
   useEffect(() => {
+    setError(null);
     loadDependencies();
     evaluateDependencies();
   }, [id]);
 
   if (loading) return <Loading />;
+  if (error) return (
+    <Card>
+      <div style={{ textAlign: 'center', padding: '48px 24px' }}>
+        <p style={{ fontSize: '16px', fontWeight: 500, color: '#DC2626', marginBottom: '12px' }}>Error loading dependencies</p>
+        <p style={{ fontSize: '14px', color: '#6B7280', marginBottom: '16px' }}>{error}</p>
+        <button className="btn btn-primary" onClick={loadDependencies}>Retry</button>
+      </div>
+    </Card>
+  );
 
   return (
     <div>

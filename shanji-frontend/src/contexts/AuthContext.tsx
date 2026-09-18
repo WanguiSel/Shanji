@@ -31,15 +31,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         organization_id: session.user.user_metadata?.organization_id ?? null,
         organization_ids: null,
         department: null,
-        project_roles: null,
+        project_roles: {},
       });
-      const { data } = await supabase.from('profiles').select('*').eq('id', session.user.id).single();
-      if (data) {
-        setProfile(data as Record<string, unknown>);
-        if (data.role && !session.user.user_metadata?.role) {
-          await supabase.auth.updateUser({ data: { role: data.role } });
+      const { data: profileData } = await supabase.from('profiles').select('*').eq('id', session.user.id).single();
+      const { data: membersData } = await supabase.from('project_members').select('project_id, role').eq('user_id', session.user.id);
+      const rolesMap: Record<string, string> = {};
+      (membersData || []).forEach((m: any) => { rolesMap[m.project_id] = m.role; });
+      if (profileData) {
+        setProfile(profileData as Record<string, unknown>);
+        if (profileData.role && !session.user.user_metadata?.role) {
+          await supabase.auth.updateUser({ data: { role: profileData.role } });
         }
       }
+      setUser((prev) => prev ? { ...prev, project_roles: rolesMap } : prev);
     } else {
       setUser(null);
       setProfile(null);
@@ -60,10 +64,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           organization_id: session.user.user_metadata?.organization_id ?? null,
           organization_ids: null,
           department: null,
-          project_roles: null,
+          project_roles: {},
         });
-        const { data } = await supabase.from('profiles').select('*').eq('id', session.user.id).single();
-        if (data) setProfile(data as Record<string, unknown>);
+        const { data: profileData2 } = await supabase.from('profiles').select('*').eq('id', session.user.id).single();
+        const { data: membersData2 } = await supabase.from('project_members').select('project_id, role').eq('user_id', session.user.id);
+        const rolesMap2: Record<string, string> = {};
+        (membersData2 || []).forEach((m: any) => { rolesMap2[m.project_id] = m.role; });
+        if (profileData2) setProfile(profileData2 as Record<string, unknown>);
+        setUser((prev) => prev ? { ...prev, project_roles: rolesMap2 } : prev);
       } else {
         setUser(null);
         setProfile(null);
@@ -93,7 +101,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const hasRole = useCallback((role: string) => {
     if (!profile) return false;
-    return profile.role === role || profile.role === 'project_manager' || profile.role === 'admin';
+    return profile.role === role;
   }, [profile]);
 
   return (

@@ -12,10 +12,11 @@ import { getTaskTransitionMatrix } from "../../lib/utils";
 function ApprovalsPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const { toasts, showToast } = useToast();
   const [approvals, setApprovals] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newApprovalTitle, setNewApprovalTitle] = useState("");
   const [selectedApproval, setSelectedApproval] = useState<any>(null);
@@ -25,29 +26,35 @@ function ApprovalsPage() {
 
   const loadApprovals = async () => {
     if (!id) return;
+    setError(null);
+    try {
+      const { data, error: fetchError } = await supabase
+        .from("approvals")
+        .select("*")
+        .eq("project_id", id)
+        .order("requested_at", { ascending: false });
+      if (fetchError) throw fetchError;
 
-    const { data } = await supabase
-      .from("approvals")
-      .select("*")
-      .eq("project_id", id)
-      .order("requested_at", { ascending: false });
+      if (data?.length) {
+        const itemIds = data.map((a) => a.item_id).filter(Boolean);
+        const { data: tasks } = await supabase
+          .from("workplan_items")
+          .select("id, status")
+          .in("id", itemIds);
 
-    if (data?.length) {
-      const itemIds = data.map((a) => a.item_id).filter(Boolean);
-      const { data: tasks } = await supabase
-        .from("workplan_items")
-        .select("id, status")
-        .in("id", itemIds);
+        const statusMap: Record<string, string> = {};
+        tasks?.forEach((t) => {
+          statusMap[t.id] = t.status;
+        });
+        setTaskStatuses(statusMap);
+      }
 
-      const statusMap: Record<string, string> = {};
-      tasks?.forEach((t) => {
-        statusMap[t.id] = t.status;
-      });
-      setTaskStatuses(statusMap);
+      setApprovals(data || []);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load approvals");
+    } finally {
+      setLoading(false);
     }
-
-    setApprovals(data || []);
-    setLoading(false);
   };
 
   const createApproval = async () => {
@@ -105,6 +112,17 @@ function ApprovalsPage() {
       .eq("id", selectedApproval.id);
 
     if (!updateError) {
+      await supabase.from("activity_logs").insert({
+        project_id: id,
+        actor_id: user?.id,
+        action: decision === "approved" ? "approval_approved" : decision === "rejected" ? "approval_rejected" : "approval_returned",
+        entity_type: "approval",
+        entity_id: selectedApproval.id,
+        description: `Approval ${decision} for ${selectedApproval.item_type} ${selectedApproval.item_id}: ${comment}`,
+        metadata: {},
+        created_at: new Date().toISOString(),
+      }).then(({ error }) => { if (error) console.error("Activity log failed:", error); });
+
       showToast("success", "Decision submitted");
       setSelectedApproval(null);
       setDecision("");
@@ -123,10 +141,20 @@ function ApprovalsPage() {
   };
 
   useEffect(() => {
+    setError(null);
     loadApprovals();
   }, [id]);
 
   if (loading) return <Loading />;
+  if (error) return (
+    <Card>
+      <div style={{ textAlign: 'center', padding: '48px 24px' }}>
+        <p style={{ fontSize: '16px', fontWeight: 500, color: '#DC2626', marginBottom: '12px' }}>Error loading approvals</p>
+        <p style={{ fontSize: '14px', color: '#6B7280', marginBottom: '16px' }}>{error}</p>
+        <button className="btn btn-primary" onClick={loadApprovals}>Retry</button>
+      </div>
+    </Card>
+  );
 
   return (
     <div>
@@ -164,21 +192,21 @@ function ApprovalsPage() {
                 <button
                   className="btn btn-sm btn-primary"
                   onClick={() => { setSelectedApproval(approval); setDecision("approved"); }}
-                  disabled={approval.status !== "pending" || !canApprove(approval)}
+                  disabled={approval.status !== "pending" || !canApprove(approval, profile?.role as string)}
                 >
                   Approve
                 </button>
                 <button
                   className="btn btn-sm btn-secondary"
                   onClick={() => { setSelectedApproval(approval); setDecision("rejected"); }}
-                  disabled={approval.status !== "pending" || !canReject(approval)}
+                  disabled={approval.status !== "pending" || !canReject(approval, profile?.role as string)}
                 >
                   Reject
                 </button>
                 <button
                   className="btn btn-sm btn-secondary"
                   onClick={() => { setSelectedApproval(approval); setDecision("returned_for_correction"); }}
-                  disabled={approval.status !== "pending" || !canReturn(approval)}
+                  disabled={approval.status !== "pending" || !canReturn(approval, profile?.role as string)}
                 >
                   Return
                 </button>
@@ -218,22 +246,22 @@ const styles: Record<string, React.CSSProperties> = {
   label: { fontSize: '13px', fontWeight: 500, color: '#374151', display: 'block', marginBottom: '4px' },
 };
 
-function canApprove(approval: any): boolean {
+function canApprove(approval: any, userRole?: string): boolean {
   if (!approval) return false;
   if (approval.status !== "pending") return false;
-  return true;
+  return userRole === "project_manager" || userRole === "admin";
 }
 
-function canReject(approval: any): boolean {
+function canReject(approval: any, userRole?: string): boolean {
   if (!approval) return false;
   if (approval.status !== "pending") return false;
-  return true;
+  return userRole === "project_manager" || userRole === "admin";
 }
 
-function canReturn(approval: any): boolean {
+function canReturn(approval: any, userRole?: string): boolean {
   if (!approval) return false;
   if (approval.status !== "pending") return false;
-  return true;
+  return userRole === "project_manager" || userRole === "admin";
 }
 
 export default ApprovalsPage;
