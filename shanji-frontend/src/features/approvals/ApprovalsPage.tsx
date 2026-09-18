@@ -3,6 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
 import { supabase } from "../../lib/supabase";
 import { Card } from "../../components/Card";
+import { Modal } from "../../components/Modal";
 import { Loading, EmptyState } from "../../components/Loading";
 import { StatusBadge } from "../../components/StatusBadge";
 import { useToast } from "../../hooks/useToast";

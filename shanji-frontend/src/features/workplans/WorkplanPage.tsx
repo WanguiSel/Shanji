@@ -36,12 +36,12 @@ function WorkplanPage() {
   };
 
   const isProjectManager = () => {
-    if (!user?.project_roles) return false;
+    if (!user?.project_roles || !id) return false;
     return user.project_roles[id] === 'project_manager';
   };
 
   const isAssistant = () => {
-    if (!user?.project_roles) return false;
+    if (!user?.project_roles || !id) return false;
     return user.project_roles[id] === 'project_assistant';
   };
 

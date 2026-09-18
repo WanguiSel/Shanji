@@ -29,7 +29,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         avatar_url: session.user.user_metadata?.avatar_url ?? null,
         role: (session.user.user_metadata?.role ?? 'member') as string,
         organization_id: session.user.user_metadata?.organization_id ?? null,
+        organization_ids: null,
         department: null,
+        project_roles: null,
       });
       const { data } = await supabase.from('profiles').select('*').eq('id', session.user.id).single();
       if (data) {
@@ -56,7 +58,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           avatar_url: session.user.user_metadata?.avatar_url ?? null,
           role: (session.user.user_metadata?.role ?? 'member') as string,
           organization_id: session.user.user_metadata?.organization_id ?? null,
+          organization_ids: null,
           department: null,
+          project_roles: null,
         });
         const { data } = await supabase.from('profiles').select('*').eq('id', session.user.id).single();
         if (data) setProfile(data as Record<string, unknown>);

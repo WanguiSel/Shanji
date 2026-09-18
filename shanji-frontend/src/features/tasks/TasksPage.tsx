@@ -12,7 +12,7 @@ function TasksPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { toasts, showToast } = useToast();
+  const { toasts, showToast, removeToast } = useToast();
   const [tasks, setTasks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -122,6 +122,7 @@ function TasksPage() {
     if (task.created_by === user.id) return true;
     if (task.responsible_user_id === user.id) return true;
     const projectRoles = user.project_roles || {};
+    if (!id) return false;
     if (projectRoles[id] && (projectRoles[id] === "project_manager" || projectRoles[id] === "site_supervisor")) return true;
     if (task.responsible_role === "assistant" && user.role === "assistant") return true;
     return false;

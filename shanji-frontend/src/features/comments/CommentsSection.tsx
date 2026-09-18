@@ -222,13 +222,13 @@ function CommentsSection({ projectId, relatedType, relatedId }: { projectId: str
       <h3 style={{ marginBottom: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         Comments
         {canPostComment() && (
-          <button
-            className="btn btn-primary"
-            onClick={() => setShowCreateModal(true)}
-            style={{ fontSize: '14px', padding: '4px 12px' }}
-          >
-            + New Comment
-          </button>
+            <button
+              className="btn btn-primary"
+              onClick={() => showToast("info", "Type your comment below and submit")}
+              style={{ fontSize: '14px', padding: '4px 12px' }}
+            >
+              + New Comment
+            </button>
         )}
       </h3>
 
@@ -358,13 +358,13 @@ function CommentItem({ comment, canEdit, canDelete, onUpdate, onDelete, onReply 
         {!comment.parent_id && canPostComment() && (
           <button
             className="btn btn-sm btn-secondary"
-            onClick={() => setReplyingTo(comment.id)}
+            onClick={() => onReply(comment.id)}
             style={{ fontSize: '11px' }}
           >
             Reply
           </button>
         )}
-        {canEdit(comment) && !comment.parent_id && (
+        {canEdit && !comment.parent_id && (
           <button
             className="btn btn-sm btn-secondary"
             onClick={() => setIsEditing(true)}
@@ -373,7 +373,7 @@ function CommentItem({ comment, canEdit, canDelete, onUpdate, onDelete, onReply 
             Edit
           </button>
         )}
-        {canDelete(comment) && (
+        {canDelete && (
           <button
             className="btn btn-sm btn-secondary"
             onClick={() => onDelete(comment.id)}
@@ -391,7 +391,7 @@ export default CommentsSection;
 
 function canPostComment(): boolean {
   const { user } = useAuth();
-  const { id: projectId, relatedType, relatedId } = useParams<{ id: string }>();
+  const { id: projectId, relatedType, relatedId } = useParams<{ id: string; relatedType?: string; relatedId?: string }>();
 
   if (!user || !projectId) return false;
 

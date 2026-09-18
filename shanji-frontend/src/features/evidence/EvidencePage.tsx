@@ -43,7 +43,7 @@ function EvidencePage() {
     const urls: Record<string, string> = {};
     for (const rec of records) {
       if (rec.file_path) {
-        const { data } = await supabase.storage.from(EVIDENCE_BUCKET).createSignedUrl(rec.file_path, { expiresIn: 3600 });
+        const { data } = await supabase.storage.from(EVIDENCE_BUCKET).createSignedUrl(rec.file_path, 3600);
         if (data?.signedUrl) {
           urls[rec.id] = data.signedUrl;
         }

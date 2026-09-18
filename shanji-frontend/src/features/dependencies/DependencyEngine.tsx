@@ -3,6 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../contexts/AuthContext";
 import { Card } from "../../components/Card";
+import { Modal } from "../../components/Modal";
 import { Loading, EmptyState } from "../../components/Loading";
 import { StatusBadge } from "../../components/StatusBadge";
 import { useToast } from "../../hooks/useToast";
@@ -26,6 +27,17 @@ function DependencyEngine() {
       .select("*, workplan_items(*)")
       .eq("project_id", id)
       .order("created_at", { ascending: false });
+    setDependencies((data || []) as any[]);
+    setLoading(false);
+  };
+
+  const loadTasks = async () => {
+    if (!id) return;
+    const { data } = await supabase
+      .from("workplan_items")
+      .select("*")
+      .eq("project_id", id)
+      .order("sort_order");
     setDependencies((data || []) as any[]);
     setLoading(false);
   };
@@ -140,7 +152,7 @@ function DependencyEngine() {
       return false;
     }
 
-    const isPM = user.project_roles && user.project_roles[id] === 'project_manager';
+    const isPM = user.project_roles && !!id && user.project_roles[id] === 'project_manager';
     if (!isPM) {
       showToast("error", "Only project managers can override dependency blocks");
       return false;

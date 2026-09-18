@@ -293,8 +293,8 @@ function Dashboard() {
                 </div>
               </div>
               <p style={styles.progressNote}>
-                {completedTasks.filter(t => t.project_id === currentProject.id).length} of {tasks.filter(t => t.project_id === currentProject.id).length} tasks completed
-                {currentProject.end_date && ` • ${getDaysUntil(currentProject.end_date) !== null && getDaysUntil(currentProject.end_date) >= 0 ? `${getDaysUntil(currentProject.end_date)} days remaining` : 'Past end date'}`}
+                {completedTasks.filter(t => t.project_id === currentProject!.id).length} of {tasks.filter(t => t.project_id === currentProject!.id).length} tasks completed
+                {((project?: typeof currentProject) => { const endDate: string = project?.end_date || ''; const days: number = getDaysUntil(endDate) || 0; return endDate ? ` • ${days >= 0 ? `${days} days remaining` : 'Past end date'}` : null; })(currentProject)}
               </p>
             </div>
           ) : (
@@ -323,11 +323,7 @@ function Dashboard() {
                   </div>
                   {item.date && (
                     <span style={styles.attentionDate}>
-                      {getDaysUntil(item.date) !== null && getDaysUntil(item.date) < 0 
-                        ? `${Math.abs(getDaysUntil(item.date))}d overdue` 
-                        : getDaysUntil(item.date) !== null 
-                          ? `${getDaysUntil(item.date)}d left` 
-                          : formatDate(item.date)}
+                      {(() => { const d = item.date!; const days = getDaysUntil(d); return days !== null && days < 0 ? `${Math.abs(days || 0)}d overdue` : days !== null ? `${days}d left` : formatDate(d); })()}
                     </span>
                   )}
                 </div>

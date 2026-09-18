@@ -52,17 +52,17 @@ function GlobalSearch() {
         supabase
           .from("workplan_items")
           .select(
-            `id, task_title, status, priority, end_date, project_id, workplan:workplans(project_name, project_code)`
-          )
-          .in(
-            "project_id",
-            (
-              await supabase
-                .from("projects")
-                .select("id")
-                .or(`organization_id.in.(${user.organization_ids || []}),id.in.(select project_id from project_members where user_id = ${user.id})`)
-            )
-          )
+             `id, task_title, status, priority, end_date, project_id, workplan:workplans(project_name, project_code)`
+           )
+           .in(
+             "project_id",
+             (
+               await supabase
+                 .from("projects")
+                 .select("id")
+                 .or(`organization_id.in.(${user.organization_ids || []}),id.in.(select project_id from project_members where user_id = ${user.id})`)
+             ).data || []
+           )
           .ilike("task_title", `%${term}%`)
           .limit(10)
       );
@@ -82,17 +82,17 @@ function GlobalSearch() {
         supabase
           .from("evidence_records")
           .select(
-            `id, title, evidence_type, created_at, project_id, task_id, uploader_id`
-          )
-          .in(
-            "project_id",
-            (
-              await supabase
-                .from("projects")
-                .select("id")
-                .or(`organization_id.in.(${user.organization_ids || []}),id.in.(select project_id from project_members where user_id = ${user.id})`)
-            )
-          )
+             `id, title, evidence_type, created_at, project_id, task_id, uploader_id`
+           )
+           .in(
+             "project_id",
+             (
+               await supabase
+                 .from("projects")
+                 .select("id")
+                 .or(`organization_id.in.(${user.organization_ids || []}),id.in.(select project_id from project_members where user_id = ${user.id})`)
+             ).data || []
+           )
           .ilike("title", `%${term}%`)
           .limit(10)
       );
@@ -104,8 +104,7 @@ function GlobalSearch() {
           .select(
             `id, title, item_type, status, requested_at, project_id, requested_by`
           )
-          .eq("project_id", id || "")
-          .ilike("title", `%${term}%`)
+           .ilike("title", `%${term}%`)
           .limit(5)
       );
 
@@ -202,7 +201,7 @@ function GlobalSearch() {
 
         {showResults && (
           <div style={styles.resultsContainer}>
-            {Object.entries(results).map(([type, items]) => {
+            {Object.entries(results as Record<string, any[]>).map(([type, items]) => {
               if (!items || items.length === 0) return null;
 
               return (
@@ -249,7 +248,7 @@ function GlobalSearch() {
 
 // Debounce utility function
 function debounce(func: Function, wait: number): (...args: any[]) => void {
-  let timeout: NodeJS.Timeout;
+  let timeout: ReturnType<typeof setTimeout>;
   return function executedFunction(...args: any[]) {
     const later = () => {
       clearTimeout(timeout);
@@ -308,11 +307,6 @@ const styles: Record<string, React.CSSProperties> = {
     border: "1px solid #E5E7EB",
     cursor: "pointer",
     transition: "all 0.2s",
-    "&:hover": {
-      background: "#EFF6FF",
-      borderColor: "#BFDBFE",
-      transform: "translateY(-2px)",
-    },
   },
   cardContent: {
     display: "flex",

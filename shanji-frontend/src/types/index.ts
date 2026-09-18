@@ -5,7 +5,9 @@ export interface User {
   avatar_url: string | null;
   role: string;
   organization_id: string | null;
+  organization_ids: string[] | null;
   department: string | null;
+  project_roles: Record<string, string> | null;
 }
 
 export interface Organization {
@@ -577,6 +579,7 @@ export interface Comment {
   project_id: string;
   parent_id: string | null;
   author_id: string;
+  responsible_user_id: string | null;
   content: string;
   mentions: string[] | null;
   related_object_type: string | null;
