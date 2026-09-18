@@ -225,55 +225,22 @@ export interface Risk {
   updated_at: string;
 }
 
-export interface Issue {
-  id: string;
-  project_id: string;
-  issue_title: string;
-  description: string | null;
-  severity: string;
-  owner_id: string | null;
-  date_raised: string;
-  due_date: string | null;
-  related_task_id: string | null;
-  resolution: string | null;
-  status: string;
-  escalation_level: number;
-  evidence: string | null;
-  created_by: string | null;
-  created_at: string;
-  updated_at: string;
+export function getRiskLevel(score: number): 'Low' | 'Medium' | 'High' | 'Critical' {
+  if (score <= 4) return 'Low';
+  if (score <= 9) return 'Medium';
+  if (score <= 16) return 'High';
+  return 'Critical';
 }
 
-export interface ProcurementRequest {
+export interface ActivityLog {
   id: string;
   project_id: string;
-  task_id: string | null;
-  requester_id: string;
-  title: string;
-  description: string | null;
-  category: string | null;
-  priority: string;
-  budget_amount: number | null;
-  currency: string;
-  status: string;
-  expected_delivery_date: string | null;
-  actual_delivery_date: string | null;
-  delay_days: number;
-  supplier_id: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface Supplier {
-  id: string;
-  organization_id: string | null;
-  supplier_name: string;
-  contact_name: string | null;
-  contact_email: string | null;
-  contact_phone: string | null;
-  address: string | null;
-  rating: number;
-  status: string;
+  actor_id: string;
+  action: string;
+  entity_type: string | null;
+  entity_id: string | null;
+  description: string;
+  metadata: Record<string, unknown> | null;
   created_at: string;
 }
 
@@ -320,6 +287,58 @@ export interface Delivery {
   verified_by: string | null;
   verified_at: string | null;
   created_at: string;
+}
+
+export interface Supplier {
+  id: string;
+  organization_id: string | null;
+  supplier_name: string;
+  contact_name: string | null;
+  contact_email: string | null;
+  contact_phone: string | null;
+  address: string | null;
+  rating: number;
+  status: string;
+  created_at: string;
+}
+
+export interface Issue {
+  id: string;
+  project_id: string;
+  issue_title: string;
+  description: string | null;
+  severity: string;
+  owner_id: string | null;
+  date_raised: string;
+  due_date: string | null;
+  related_task_id: string | null;
+  resolution: string | null;
+  status: string;
+  escalation_level: number;
+  evidence: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProcurementRequest {
+  id: string;
+  project_id: string;
+  task_id: string | null;
+  requester_id: string;
+  title: string;
+  description: string | null;
+  category: string | null;
+  priority: string;
+  budget_amount: number | null;
+  currency: string;
+  status: string;
+  expected_delivery_date: string | null;
+  actual_delivery_date: string | null;
+  delay_days: number;
+  supplier_id: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface Budget {
