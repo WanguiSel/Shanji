@@ -149,6 +149,7 @@ function Dashboard() {
             <span style={styles.logo}>Shanji</span><span style={styles.logoAccent}>DNA</span>
           </div>
           <p style={styles.subtitle}>Project Operations Command Centre</p>
+          <div style={styles.marker}>✅ SHANJI COMMAND CENTRE — NEW DASHBOARD</div>
         </div>
         <div style={styles.headerRight}>
           <div style={styles.greeting}>
@@ -363,6 +364,7 @@ function Dashboard() {
 }
 
 const styles: Record<string, React.CSSProperties> = {
+<<<<<<< ours
   container: { padding: "24px", maxWidth: "1400px", margin: "0 auto", background: "#F9FAFB", minHeight: "100vh" },
   header: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "28px", paddingBottom: "16px", borderBottom: "1px solid #E5E7EB" },
   headerLeft: { display: "flex", flexDirection: "column", gap: "2px" },
@@ -398,6 +400,83 @@ const styles: Record<string, React.CSSProperties> = {
   attentionList: { display: "flex", flexDirection: "column", gap: "8px" },
   attentionItem: { display: "flex", alignItems: "center", gap: "12px", padding: "12px 16px", background: "white", borderRadius: "8px", border: "1px solid #E5E7EB", cursor: "pointer" },
   attentionDot: { width: "8px", height: "8px", borderRadius: "50%", flexShrink: 0 },
+=======
+  container: { padding: '24px', maxWidth: '1400px', margin: '0 auto' },
+  header: { 
+    display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', 
+    marginBottom: '32px', paddingBottom: '20px', borderBottom: '1px solid #E5E7EB' 
+  },
+  headerLeft: { display: 'flex', flexDirection: 'column', gap: '4px' },
+  brand: { display: 'flex', alignItems: 'baseline', gap: '4px' },
+  logo: { fontSize: '28px', fontWeight: '700', color: '#0D3B2E', letterSpacing: '-0.02em' },
+  logoAccent: { fontSize: '28px', fontWeight: '700', color: '#F59E0B' },
+  subtitle: { fontSize: '14px', color: '#6B7280', margin: 0, fontWeight: 400 },
+  marker: { fontSize: '11px', fontWeight: 700, color: '#10B981', marginTop: '4px', padding: '2px 8px', background: '#ECFDF5', border: '1px solid #A7F3D0', borderRadius: '4px', display: 'inline-block', width: 'fit-content' },
+  headerRight: { display: 'flex', alignItems: 'center', gap: '24px' },
+  greeting: { display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '2px' },
+  projectSelector: { display: 'flex', alignItems: 'center', gap: '8px' },
+  selectorLabel: { fontSize: '13px', color: '#6B7280' },
+  select: { 
+    padding: '8px 12px', borderRadius: '6px', border: '1px solid #D1D5DB', 
+    fontSize: '14px', background: 'white', minWidth: '220px' 
+  },
+  healthSection: { marginBottom: '32px' },
+  healthCard: { 
+    background: 'white', borderRadius: '16px', border: '1px solid #E5E7EB', 
+    padding: '24px', display: 'flex', flexDirection: 'column', gap: '24px' 
+  },
+  healthMain: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '32px' },
+  healthStatus: { display: 'flex', alignItems: 'center', gap: '16px', flex: 1 },
+  healthIndicator: { width: '16px', height: '16px', borderRadius: '50%', flexShrink: 0 },
+  healthTitle: { fontSize: '24px', fontWeight: '700', color: '#1F2937', margin: '0 0 4px' },
+  healthSubtitle: { fontSize: '14px', color: '#6B7280', margin: 0 },
+  healthProgress: { display: 'flex', alignItems: 'center', gap: '24px' },
+  progressRing: { flexShrink: 0 },
+  progressText: { fontSize: '20px', fontWeight: '700', fill: '#1F2937', dominantBaseline: 'central' },
+  progressDetails: { display: 'flex', flexDirection: 'column', gap: '4px' },
+  progressLabel: { fontSize: '13px', color: '#6B7280', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' },
+  progressValue: { fontSize: '28px', fontWeight: '700', color: '#1F2937', margin: 0 },
+  healthMeta: { 
+    display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px', 
+    paddingTop: '16px', borderTop: '1px solid #E5E7EB' 
+  },
+  metaItem: { display: 'flex', flexDirection: 'column', gap: '4px' },
+  metaLabel: { fontSize: '11px', color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.05em' },
+  metaValue: { fontSize: '14px', fontWeight: 500, color: '#374151' },
+  metricsSection: { marginBottom: '32px' },
+  metricsGrid: { 
+    display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', 
+    gap: '16px' 
+  },
+  twoColumn: { 
+    display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '24px',
+    marginBottom: '32px'
+  },
+  panel: { 
+    background: 'white', borderRadius: '12px', border: '1px solid #E5E7EB', 
+    padding: '24px', minHeight: '280px' 
+  },
+  panelTitle: { 
+    fontSize: '16px', fontWeight: '600', color: '#1F2937', 
+    margin: '0 0 20px', display: 'flex', alignItems: 'center', gap: '8px' 
+  },
+  emptyState: { 
+    padding: '40px 24px', textAlign: 'center', color: '#9CA3AF', 
+    background: '#F9FAFB', borderRadius: '8px', border: '1px dashed #D1D5DB' 
+  },
+  progressBarContainer: { display: 'flex', flexDirection: 'column', gap: '8px' },
+  progressBarBg: { height: '12px', background: '#E5E7EB', borderRadius: '6px', overflow: 'hidden' },
+  progressBarFill: { height: '100%', borderRadius: '6px', transition: 'width 0.3s ease' },
+  progressLabels: { display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#9CA3AF' },
+  progressNote: { fontSize: '13px', color: '#6B7280', margin: '12px 0 0' },
+  attentionList: { display: 'flex', flexDirection: 'column', gap: '12px' },
+  attentionItem: { 
+    display: 'flex', alignItems: 'center', gap: '12px', 
+    padding: '12px 16px', background: '#F9FAFB', borderRadius: '8px', 
+    border: '1px solid #E5E7EB' 
+  },
+  attentionDot: { width: '10px', height: '10px', borderRadius: '50%', flexShrink: 0 },
+>>>>>>> theirs
   attentionContent: { flex: 1, minWidth: 0 },
   attentionLabel: { fontSize: "13px", fontWeight: 600, color: "#1F2937", margin: "0 0 2px", whiteSpace: "nowrap" as const, overflow: "hidden", textOverflow: "ellipsis" },
   attentionReason: { fontSize: "12px", color: "#6B7280", margin: 0 },
