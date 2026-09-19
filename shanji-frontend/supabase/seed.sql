@@ -184,5 +184,50 @@ ON CONFLICT DO NOTHING;
 INSERT INTO comments (id, project_id, author_id, content, related_object_type, related_object_id)
 VALUES
   ('d0000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000002', 'Site work progressing well at County Hall.', 'task', '30000000-0000-0000-0000-000000000004'),
-  ('d0000000-0000-0000-0000-000000000002', '10000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000001', 'Need to expedite inverter delivery. Follow up with supplier.', 'procurement', '70000000-0000-0000-0000-000000000002'),
+  ('d0000000-0000-0000-0000-000000000002', '10000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000001', 'Need to expedite inverter delivery. Follow up with supplier.', 'procurement', '70000000-0000-0000-0000-000000000002')
+ON CONFLICT DO NOTHING;
+
+-- 20. Incidents
+INSERT INTO incidents (id, project_id, incident_type, title, description, severity, reported_by, date_occurred, location, people_involved, immediate_actions, investigation, corrective_actions, status, created_at, updated_at)
+VALUES
+  ('e0000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001', 'safety', 'Minor fall at County Hall site', 'Worker slipped on wet surface during roof assessment', 'medium', '00000000-0000-0000-0000-000000000002', '2024-09-10', 'County Hall', '2 workers', 'First aid applied; incident reported', 'Investigation ongoing', 'Improve site drainage and add anti-slip mats', 'investigating', NOW(), NOW()),
+  ('e0000000-0000-0000-0000-000000000002', '10000000-0000-0000-0000-000000000001', 'safety', 'Electrical hazard during installation', 'Exposed wiring found at Library Annex installation point', 'high', '00000000-0000-0000-0000-000000000002', '2024-09-15', 'Library Annex', '1 electrician', 'Area cordoned off; qualified electrician notified', 'Root cause analysis in progress', 'Install proper cable conduits before next phase', 'open', NOW(), NOW())
+ON CONFLICT DO NOTHING;
+
+-- 21. Inspections
+INSERT INTO inspections (id, project_id, inspection_type, title, description, inspector_id, inspection_date, location, findings, compliance_status, evidence_path, status, created_at)
+VALUES
+  ('f0000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001', 'safety', 'Site Safety Inspection - County Hall', 'Quarterly safety compliance check', '00000000-0000-0000-0000-000000000001', '2024-09-01', 'County Hall', 'PPE compliance good; emergency exits clear', 'compliant', NULL, 'open', NOW()),
+  ('f0000000-0000-0000-0000-000000000002', '10000000-0000-0000-0000-000000000001', 'electrical', 'Electrical Installation Inspection - Library', 'Electrical wiring and grounding verification', '00000000-0000-0000-0000-000000000002', '2024-09-18', 'Library Annex', 'Cable routing non-compliant; missing grounding on inverter 3', 'non_compliant', NULL, 'open', NOW())
+ON CONFLICT DO NOTHING;
+
+-- 22. Corrective Actions
+INSERT INTO corrective_actions (id, project_id, incident_id, inspection_id, risk_id, title, description, assigned_to, due_date, status, created_at, updated_at)
+VALUES
+  ('10000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001', 'e0000000-0000-0000-0000-000000000001', NULL, NULL, 'Improve site drainage', 'Install proper drainage system at County Hall roof work area to prevent future slips', '00000000-0000-0000-0000-000000000002', '2024-09-25', 'in_progress', NOW(), NOW()),
+  ('10000000-0000-0000-0000-000000000002', '10000000-0000-0000-0000-000000000001', NULL, 'f0000000-0000-0000-0000-000000000002', NULL, 'Fix electrical grounding', 'Install proper cable conduits and grounding on inverter 3 at Library Annex', '00000000-0000-0000-0000-000000000002', '2024-09-20', 'open', NOW(), NOW())
+ON CONFLICT DO NOTHING;
+
+-- 23. Near Misses
+INSERT INTO near_misses (id, project_id, report_date, location, description, risk_level, category, responsible_person, mitigation, due_date, status, created_by, created_at, updated_at)
+VALUES
+  ('20000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001', '2024-09-12', 'County Hall', 'Inverter almost dropped during crane lift — operator stopped operation in time', 'high', 'hse', '00000000-0000-0000-0000-000000000002', 'Re-certify crane operator; add tag line; revised lift plan', '2024-10-01', 'open', '00000000-0000-0000-0000-000000000002', NOW(), NOW())
+ON CONFLICT DO NOTHING;
+
+-- 24. Payments
+INSERT INTO payments (id, project_id, expense_id, supplier_id, amount, currency, payment_method, payment_date, reference_number, status, created_at)
+VALUES
+  ('30000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001', NULL, '30000000-0000-0000-0000-000000000002', 540000, 'KES', 'bank_transfer', '2024-07-20', 'PAY-2024-0715-001', 'completed', NOW())
+ON CONFLICT DO NOTHING;
+
+-- 25. Funds
+INSERT INTO funds (id, project_id, source, funding_type, amount, currency, date_received, reference, document_path, status, description, created_by, created_at, updated_at)
+VALUES
+  ('40000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001', 'County Council Treasury', 'grant', 1500000, 'KES', '2024-06-15', 'FND-2024-001', NULL, 'received', 'Initial project funding allocation', '00000000-0000-0000-0000-000000000001', NOW(), NOW())
+ON CONFLICT DO NOTHING;
+
+-- 26. Finance Approvals
+INSERT INTO finance_approvals (id, project_id, expense_id, requester_id, approver_id, type, status, reason, comment, amount, submitted_at, decided_at, created_at)
+VALUES
+  ('50000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001', NULL, '00000000-0000-0000-0000-000000000003', '00000000-0000-0000-0000-000000000004', 'expense', 'pending', 'Equipment procurement approval', NULL, 1200000, NOW(), NULL, NOW())
 ON CONFLICT DO NOTHING;

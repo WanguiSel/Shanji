@@ -20,13 +20,22 @@ function Dashboard() {
   const [evidence, setEvidence] = useState<any[]>([]);
   const [procurement, setProcurement] = useState<any[]>([]);
   const [activityLogs, setActivityLogs] = useState<any[]>([]);
+  const [expenses, setExpenses] = useState<any[]>([]);
+  const [incidents, setIncidents] = useState<any[]>([]);
+  const [inspections, setInspections] = useState<any[]>([]);
+  const [correctiveActions, setCorrectiveActions] = useState<any[]>([]);
+  const [nearMisses, setNearMisses] = useState<any[]>([]);
+  const [payments, setPayments] = useState<any[]>([]);
+  const [funds, setFunds] = useState<any[]>([]);
+  const [financeApprovals, setFinanceApprovals] = useState<any[]>([]);
+  const [budgets, setBudgets] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => { loadDashboard(); }, []);
 
   async function loadDashboard() {
     try {
-      const [pR, rR, tR, aR, eR, prR, acR] = await Promise.all([
+      const [pR, rR, tR, aR, eR, prR, acR, expR, iR, inspR, caR, nmR, payR, fR, faR, budR] = await Promise.all([
         supabase.from("projects").select("*").order("created_at", { ascending: false }),
         supabase.from("risks").select("*").order("created_at", { ascending: false }),
         supabase.from("workplan_items").select("*").order("created_at", { ascending: false }),
@@ -34,6 +43,15 @@ function Dashboard() {
         supabase.from("evidence_records").select("*").order("created_at", { ascending: false }),
         supabase.from("procurement_requests").select("*").order("created_at", { ascending: false }),
         supabase.from("activity_logs").select("id,project_id,actor_id,action,entity_type,entity_id,description,metadata,created_at").order("created_at", { ascending: false }).limit(20),
+        supabase.from("expenses").select("*").order("created_at", { ascending: false }),
+        supabase.from("incidents").select("*").order("date_occurred", { ascending: false }),
+        supabase.from("inspections").select("*").order("inspection_date", { ascending: false }),
+        supabase.from("corrective_actions").select("*").order("due_date", { ascending: true }),
+        supabase.from("near_misses").select("*").order("report_date", { ascending: false }),
+        supabase.from("payments").select("*").order("created_at", { ascending: false }),
+        supabase.from("funds").select("*").order("date_received", { ascending: false }),
+        supabase.from("finance_approvals").select("*").order("submitted_at", { ascending: false }),
+        supabase.from("budgets").select("*").order("created_at", { ascending: false }),
       ]);
       setProjects((pR.data || []) as any[]);
       setRisks((rR.data || []) as any[]);
@@ -42,6 +60,15 @@ function Dashboard() {
       setEvidence((eR.data || []) as any[]);
       setProcurement((prR.data || []) as any[]);
       setActivityLogs((acR.data || []) as any[]);
+      setExpenses((expR.data || []) as any[]);
+      setIncidents((iR.data || []) as any[]);
+      setInspections((inspR.data || []) as any[]);
+      setCorrectiveActions((caR.data || []) as any[]);
+      setNearMisses((nmR.data || []) as any[]);
+      setPayments((payR.data || []) as any[]);
+      setFunds((fR.data || []) as any[]);
+      setFinanceApprovals((faR.data || []) as any[]);
+      setBudgets((budR.data || []) as any[]);
     } catch (err) { console.error("Dashboard error:", err); }
     setLoading(false);
   }
@@ -86,7 +113,52 @@ function Dashboard() {
     .sort((a: any, b: any) => a.daysUntil - b.daysUntil)
     .slice(0, 8);
 
+  // --- FINANCE METRICS ---
+  const totalBudget = budgets.reduce((s: number, b: any) => s + (b.amount || 0), 0);
+  const totalSpent = expenses.reduce((s: number, e: any) => s + (e.amount || 0), 0);
+  const totalPaid = payments.reduce((s: number, p: any) => s + (p.amount || 0), 0);
+  const totalFunds = funds.reduce((s: number, f: any) => s + (f.amount || 0), 0);
+  const remainingBudget = totalBudget - totalSpent;
+  const pendingExpenses = expenses.filter((e: any) => e.approval_status === "pending");
+  const approvedExpenses = expenses.filter((e: any) => e.approval_status === "approved");
+  const budgetUsePct = totalBudget > 0 ? Math.round((totalSpent / totalBudget) * 100) : 0;
+
+  // --- HSEQ METRICS ---
+  const openIncidents = incidents.filter((i: any) => i.status === "open" || i.status === "investigating").length;
+  const highRiskHazards = incidents.filter((i: any) => i.severity === "high" || i.severity === "critical").length;
+  const overdueActions = correctiveActions.filter((a: any) => a.due_date && new Date(a.due_date) < new Date() && a.status !== "completed").length;
+  const openNearMisses = nearMisses.filter((n: any) => n.status === "open").length;
+  const nonCompliantInspections = inspections.filter((i: any) => i.compliance_status === "non_compliant").length;
+  const upcomingInspections = inspections.filter((i: any) => new Date(i.inspection_date) >= new Date()).length;
+
   // --- ATTENTION ITEMS ---
+  const financeAttentionItems = [
+    ...pendingExpenses.slice(0, 3).map((e: any) => ({
+      type: "finance", label: e.description || e.expense_category || "Expense",
+      reason: "Awaiting approval", date: e.expense_date || e.created_at,
+      navigate: `/projects/${e.project_id}/finance`,
+    })),
+    ...(totalBudget > 0 && budgetUsePct > 90 ? [{
+      type: "finance", label: "Budget Near Limit", reason: `${budgetUsePct}% used`, date: new Date().toISOString(),
+      navigate: `/projects/${projects[0]?.project_id || ""}/finance`,
+    }] : []),
+  ];
+
+  const hseqAttentionItems = [
+    ...incidents.filter((i: any) => i.status === "open" || i.status === "investigating").slice(0, 3).map((i: any) => ({
+      type: "hseq", label: i.title || "Incident", reason: `${i.severity} incident`, date: i.date_occurred,
+      navigate: `/projects/${i.project_id}/hseq`,
+    })),
+    ...correctiveActions.filter((a: any) => a.due_date && new Date(a.due_date) < new Date() && a.status !== "completed").slice(0, 2).map((a: any) => ({
+      type: "hseq", label: a.title || "Action", reason: "Overdue action", date: a.due_date,
+      navigate: `/projects/${a.project_id}/hseq`,
+    })),
+    ...nearMisses.filter((n: any) => n.status === "open").slice(0, 2).map((n: any) => ({
+      type: "hseq", label: "Near Miss", reason: "Open near miss", date: n.report_date,
+      navigate: `/projects/${n.project_id}/hseq`,
+    })),
+  ];
+
   const attentionItems = [
     ...overdueTasks.slice(0, 3).map((t: any) => ({ type: "overdue", label: t.task_title || "Task", reason: "Overdue", date: t.end_date, navigate: `/projects/${t.project_id}/tasks` })),
     ...criticalRisks.slice(0, 2).map((r: any) => ({ type: "risk", label: r.risk_title || "Risk", reason: "Critical risk", date: r.due_date, navigate: `/projects/${r.project_id}/risks` })),
@@ -97,6 +169,8 @@ function Dashboard() {
       const pr = p.priority;
       return (s === "pending" || s === "review" || s === "quotations") && (pr === "critical" || pr === "high");
     }).slice(0, 2).map((p: any) => ({ type: "procurement", label: p.title || "Procurement", reason: `${p.priority} priority`, date: p.expected_delivery_date || p.created_at, navigate: `/projects/${p.project_id}/procurement` })),
+    ...financeAttentionItems.slice(0, 3),
+    ...hseqAttentionItems.slice(0, 3),
   ].sort((a: any, b: any) => (a.date ? new Date(a.date).getTime() : 0) - (b.date ? new Date(b.date).getTime() : 0));
 
   // --- PM INTELLIGENCE ---
@@ -105,6 +179,7 @@ function Dashboard() {
   const pmPendingApprovals = pendingApprovals.length;
   const pmEvidenceGaps = evidencePending.length;
   const pmTasksDueSoon = dueSoonTasks.length;
+  const pmActiveProgress = overallProgress;
 
   // --- FORMATTERS ---
   const formatDate = (s: string | null | undefined) => {
@@ -235,12 +310,12 @@ function Dashboard() {
           <div style={styles.attentionList}>
             {attentionItems.map((item, i) => (
               <div key={i} style={styles.attentionItem} onClick={() => item.navigate && navigate(item.navigate)}>
-                <div style={{ ...styles.attentionDot, background: item.type === "overdue" ? "#DC2626" : item.type === "risk" ? "#EF4444" : item.type === "approval" ? "#8B5CF6" : item.type === "evidence" ? "#EC4899" : item.type === "procurement" ? "#F59E0B" : "#3B82F6" }} />
+                <div style={{ ...styles.attentionDot, background: item.type === "overdue" ? "#DC2626" : item.type === "risk" ? "#EF4444" : item.type === "finance" ? "#059669" : item.type === "hseq" ? "#7C3AED" : item.type === "approval" ? "#8B5CF6" : item.type === "evidence" ? "#EC4899" : item.type === "procurement" ? "#F59E0B" : "#3B82F6" }} />
                 <div style={styles.attentionContent}>
                   <p style={styles.attentionLabel}>{item.label}</p>
                   <p style={styles.attentionReason}>{item.reason}</p>
                 </div>
-                <span style={styles.attentionDate}>{item.type === "overdue" ? "Overdue" : item.type === "risk" ? "At risk" : "Pending"}</span>
+                <span style={styles.attentionDate}>{item.type === "overdue" ? "Overdue" : item.type === "risk" ? "At risk" : item.type === "finance" ? "Awaiting" : item.type === "hseq" ? "HSEQ" : "Pending"}</span>
               </div>
             ))}
           </div>
@@ -354,7 +429,23 @@ function Dashboard() {
             </div>
             <div style={styles.pmCard}>
               <p style={styles.pmLabel}>Active Progress</p>
-              <p style={styles.pmValue}>{overallProgress}% overall</p>
+              <p style={styles.pmValue}>{pmActiveProgress}% overall</p>
+            </div>
+            <div style={styles.pmCard}>
+              <p style={styles.pmLabel}>Budget Usage</p>
+              <p style={styles.pmValue}>{budgetUsePct}% used</p>
+            </div>
+            <div style={styles.pmCard}>
+              <p style={styles.pmLabel}>Pending Expenses</p>
+              <p style={styles.pmValue}>{pendingExpenses.length} awaiting approval</p>
+            </div>
+            <div style={styles.pmCard}>
+              <p style={styles.pmLabel}>Open Incidents</p>
+              <p style={styles.pmValue}>{openIncidents} open</p>
+            </div>
+            <div style={styles.pmCard}>
+              <p style={styles.pmLabel}>Overdue Actions</p>
+              <p style={styles.pmValue}>{overdueActions} HSEQ</p>
             </div>
           </div>
         </section>

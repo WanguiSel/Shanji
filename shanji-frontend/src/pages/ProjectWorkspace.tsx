@@ -34,6 +34,7 @@ function ProjectWorkspace() {
     { key: "issues", label: "Issues" },
     { key: "procurement", label: "Procurement" },
     { key: "finance", label: "Finance" },
+    { key: "hseq", label: "HSEQ" },
     { key: "site", label: "Site" },
     { key: "documents", label: "Documents" },
     { key: "approvals", label: "Approvals" },
@@ -76,13 +77,13 @@ function ProjectWorkspace() {
         ))}
       </div>
       <div style={{ marginTop: '24px' }}>
-        <ContentTab project={project} tab={activeTab} />
+        <ContentTab project={project} tab={activeTab} navigate={navigate} />
       </div>
     </div>
   );
 }
 
-function ContentTab({ project, tab }: { project: Project; tab: string }) {
+function ContentTab({ project, tab, navigate }: { project: Project; tab: string; navigate: any }) {
   switch (tab) {
     case "overview":
       return (
@@ -100,7 +101,25 @@ function ContentTab({ project, tab }: { project: Project; tab: string }) {
     case "risks":
       return <Card><EmptyState title="View Risks" message="Navigate to Risks tab." /></Card>;
     case "finance":
-      return <Card><EmptyState title="View Finance" message="Navigate to Finance tab." /></Card>;
+      return (
+        <Card>
+          <div style={{ textAlign: "center", padding: "24px" }}>
+            <p style={{ fontSize: "16px", fontWeight: 500, marginBottom: "8px", color: "#6B7280" }}>Finance</p>
+            <p style={{ fontSize: "14px", color: "#9CA3AF", marginBottom: "16px" }}>Budget, expenses, and financial accountability</p>
+            <button className="btn btn-primary" onClick={() => navigate(`/projects/${project.id}/finance`)}>Open Finance</button>
+          </div>
+        </Card>
+      );
+    case "hseq":
+      return (
+        <Card>
+          <div style={{ textAlign: "center", padding: "24px" }}>
+            <p style={{ fontSize: "16px", fontWeight: 500, marginBottom: "8px", color: "#6B7280" }}>HSEQ / OHS</p>
+            <p style={{ fontSize: "14px", color: "#9CA3AF", marginBottom: "16px" }}>Health, safety, environment and occupational health management</p>
+            <button className="btn btn-primary" onClick={() => navigate(`/projects/${project.id}/hseq`)}>Open HSEQ</button>
+          </div>
+        </Card>
+      );
     default:
       return <Card><EmptyState title={tab} message="This module is under development." /></Card>;
   }
