@@ -6,7 +6,7 @@ import { Card, StatCard } from "../../components/Card";
 import { Loading, EmptyState } from "../../components/Loading";
 import { Modal } from "../../components/Modal";
 import { useToast } from "../../hooks/useToast";
-import type { Expense, Budget, Payment } from "../../types";
+import type { Expense, Budget, Payment, Fund, FinanceApproval } from "../../types";
 
 const EXPENSE_CATEGORIES = [
   "Transport", "Accommodation", "Meals", "Equipment", "Materials",
@@ -39,6 +39,19 @@ function FinancePage() {
   const [payReference, setPayReference] = useState("");
   const [payExpenseId, setPayExpenseId] = useState("");
   const [paySupplierId, setPaySupplierId] = useState("");
+  const [funds, setFunds] = useState<Fund[]>([]);
+  const [approvals, setApprovals] = useState<FinanceApproval[]>([]);
+  const [showCreateFund, setShowCreateFund] = useState(false);
+  const [showFinanceApprove, setShowFinanceApprove] = useState<string | null>(null);
+  const [fundSource, setFundSource] = useState("");
+  const [fundType, setFundType] = useState("capital");
+  const [fundAmount, setFundAmount] = useState("");
+  const [fundCurrency, setFundCurrency] = useState("KES");
+  const [fundDate, setFundDate] = useState("");
+  const [fundRef, setFundRef] = useState("");
+  const [fundDoc, setFundDoc] = useState("");
+  const [fundDesc, setFundDesc] = useState("");
+  const [fundStatus, setFundStatus] = useState("received");
   const { toasts, showToast } = useToast();
 
   useEffect(() => { loadData(); }, [id]);
@@ -47,14 +60,18 @@ function FinancePage() {
     if (!id) return;
     setError(null);
     try {
-      const [expR, budR, payR] = await Promise.all([
+      const [expR, budR, payR, fundR, appR] = await Promise.all([
         supabase.from("expenses").select("*").eq("project_id", id).order("created_at", { ascending: false }),
         supabase.from("budgets").select("*").eq("project_id", id),
         supabase.from("payments").select("*").eq("project_id", id).order("created_at", { ascending: false }),
+        supabase.from("funds").select("*").eq("project_id", id).order("date_received", { ascending: false }),
+        supabase.from("finance_approvals").select("*").eq("project_id", id).order("submitted_at", { ascending: false }),
       ]);
       setExpenses((expR.data || []) as Expense[]);
       setBudgets((budR.data || []) as Budget[]);
       setPayments((payR.data || []) as Payment[]);
+      setFunds((fundR.data || []) as Fund[]);
+      setApprovals((appR.data || []) as FinanceApproval[]);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load finance data");
     } finally {
@@ -155,6 +172,56 @@ function FinancePage() {
     setPayReference(""); setPayExpenseId(""); setPaySupplierId("");
   }
 
+  async function createFund() {
+    if (!id || !fundSource.trim() || !fundAmount) return;
+    const { data, error } = await supabase.from("funds").insert({
+      project_id: id,
+      source: fundSource.trim(),
+      funding_type: fundType,
+      amount: parseFloat(fundAmount),
+      currency: fundCurrency,
+      date_received: fundDate || new Date().toISOString().split("T")[0],
+      reference: fundRef || null,
+      document_path: fundDoc || null,
+      status: fundStatus,
+      description: fundDesc || null,
+      created_by: user?.id || "",
+    }).select().single();
+    if (!error) {
+      showToast("success", "Fund recorded");
+      await logActivity("fund_received", `Fund "${fundSource.trim()}" of ${fundCurrency || "KES"} ${parseFloat(fundAmount).toLocaleString()} received`, "fund", data.id);
+      setShowCreateFund(false);
+      resetFundForm();
+      loadData();
+    } else {
+      showToast("error", "Failed to record fund");
+    }
+  }
+
+  function resetFundForm() {
+    setFundSource(""); setFundType("capital"); setFundAmount("");
+    setFundCurrency("KES"); setFundDate(""); setFundRef("");
+    setFundDoc(""); setFundDesc(""); setFundStatus("received");
+  }
+
+  async function approveFinanceApproval(approvalId: string, approve: boolean) {
+    const { error } = await supabase.from("finance_approvals").update({
+      status: approve ? "approved" : "rejected",
+      approver_id: user?.id,
+      comment: approveComment,
+      decided_at: new Date().toISOString(),
+    }).eq("id", approvalId);
+    if (!error) {
+      showToast("success", approve ? "Finance approval granted" : "Finance approval rejected");
+      await logActivity(approve ? "finance_approved" : "finance_rejected", `Finance ${approve ? "approved" : "rejected"}`, "finance_approval", approvalId);
+      setShowFinanceApprove(null);
+      setApproveComment("");
+      loadData();
+    } else {
+      showToast("error", "Failed to update approval");
+    }
+  }
+
   function resetForm() {
     setFormTitle(""); setFormCategory("Other"); setFormAmount("");
     setFormCurrency("KES"); setFormDate(""); setFormDesc("");
@@ -164,6 +231,7 @@ function FinancePage() {
   const totalBudget = budgets.reduce((s, b) => s + (b.amount || 0), 0);
   const totalSpent = expenses.reduce((s, e) => s + (e.amount || 0), 0);
   const totalPaid = payments.reduce((s, p) => s + (p.amount || 0), 0);
+  const totalFunds = funds.reduce((s, f) => s + (f.amount || 0), 0);
   const remaining = totalBudget - totalSpent;
   const pendingExpenses = expenses.filter((e) => e.approval_status === "pending");
   const approvedExpenses = expenses.filter((e) => e.approval_status === "approved");
@@ -171,6 +239,11 @@ function FinancePage() {
   const pendingPayments = payments.filter((p) => p.status === "pending");
   const completedPayments = payments.filter((p) => p.status === "completed");
   const failedPayments = payments.filter((p) => p.status === "failed");
+  const pendingApprovals = approvals.filter((a) => a.status === "pending");
+  const approvedApprovals = approvals.filter((a) => a.status === "approved");
+  const rejectedApprovals = approvals.filter((a) => a.status === "rejected");
+  const openFunds = funds.filter((f) => f.status === "received");
+  const reconciledFunds = funds.filter((f) => f.status === "reconciled");
   const categorySpending = EXPENSE_CATEGORIES.map((cat) => ({
     category: cat,
     spent: expenses.filter((e) => e.expense_category === cat).reduce((s, e) => s + (e.amount || 0), 0),
@@ -189,6 +262,7 @@ function FinancePage() {
           <div style={{ display: "flex", gap: "8px" }}>
             <button className="btn btn-primary" onClick={() => setShowCreate(true)}>+ New Expense</button>
             <button className="btn btn-secondary" onClick={() => setShowCreatePayment(true)}>Record Payment</button>
+            <button className="btn btn-secondary" onClick={() => setShowCreateFund(true)}>Receive Fund</button>
           </div>
         )}
       </div>
@@ -203,6 +277,7 @@ function FinancePage() {
         <StatCard title="Total Budget" value={`${formCurrency || "KES"} ${totalBudget.toLocaleString()}`} />
         <StatCard title="Total Spent" value={`${formCurrency || "KES"} ${totalSpent.toLocaleString()}`} color="#DC2626" />
         <StatCard title="Remaining" value={`${formCurrency || "KES"} ${remaining.toLocaleString()}`} color={remaining >= 0 ? "#059669" : "#DC2626"} />
+        <StatCard title="Funds" value={`${formCurrency || "KES"} ${totalFunds.toLocaleString()}`} color="#059669" />
       </div>
 
       <div style={{ marginTop: "24px", display: "flex", gap: "16px", flexWrap: "wrap" }}>
@@ -212,9 +287,16 @@ function FinancePage() {
       </div>
 
       <div style={{ marginTop: "24px", display: "flex", gap: "16px", flexWrap: "wrap" }}>
-        <StatCard title="Total Paid" value={`KES ${totalPaid.toLocaleString()}`} color="#059669" />
+        <StatCard title="Total Paid" value={`${formCurrency || "KES"} ${totalPaid.toLocaleString()}`} color="#059669" />
         <StatCard title="Pending Payments" value={pendingPayments.length} subtitle="Awaiting processing" color="#D97706" />
         <StatCard title="Failed" value={failedPayments.length} subtitle="Failed payments" color="#DC2626" />
+      </div>
+
+      <div style={{ marginTop: "24px", display: "flex", gap: "16px", flexWrap: "wrap" }}>
+        <StatCard title="Budget Use %" value={totalBudget > 0 ? `${Math.min(Math.round((totalSpent / totalBudget) * 100), 100)}%` : "0%"} subtitle="Budget vs actual" color={totalBudget > 0 && (totalSpent / totalBudget) > 0.9 ? "#DC2626" : "#059669"} />
+        <StatCard title="Pending Approvals" value={pendingApprovals.length} subtitle="Finance requests" color="#D97706" />
+        <StatCard title="Open Funds" value={openFunds.length} subtitle="Awaiting reconciliation" color="#0D3B2E" />
+        <StatCard title="Reconciled" value={reconciledFunds.length} subtitle="Funds reconciled" color="#059669" />
       </div>
 
       <div style={{ marginTop: "24px" }}>
@@ -315,6 +397,82 @@ function FinancePage() {
           </div>
         )}
       </div>
+
+      {funds.length > 0 && (
+        <div style={{ marginTop: "32px" }}>
+          <h2 style={{ fontSize: "18px", marginBottom: "16px" }}>Funds Received</h2>
+          <div style={styles.tableWrap}>
+            <table style={styles.table}>
+              <thead>
+                <tr>
+                  <th style={styles.th}>Source</th>
+                  <th style={styles.th}>Type</th>
+                  <th style={styles.th}>Amount</th>
+                  <th style={styles.th}>Date</th>
+                  <th style={styles.th}>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {funds.map((f) => (
+                  <tr key={f.id} style={styles.tr}>
+                    <td style={styles.td}>{f.source}</td>
+                    <td style={styles.td}>{f.funding_type}</td>
+                    <td style={{ ...styles.td, fontWeight: 600 }}>{f.currency || "KES"} {(f.amount || 0).toLocaleString()}</td>
+                    <td style={styles.td}>{f.date_received}</td>
+                    <td style={styles.td}>
+                      <span style={{
+                        padding: "4px 8px", borderRadius: "4px", fontSize: "12px",
+                        background: f.status === "reconciled" ? "#ECFDF5" : f.status === "flagged" ? "#FEF2F2" : "#F3F4F6",
+                        color: f.status === "reconciled" ? "#059669" : f.status === "flagged" ? "#DC2626" : "#D97706",
+                      }}>{f.status}</span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {approvals.length > 0 && (
+        <div style={{ marginTop: "32px" }}>
+          <h2 style={{ fontSize: "18px", marginBottom: "16px" }}>Finance Approvals</h2>
+          <div style={styles.tableWrap}>
+            <table style={styles.table}>
+              <thead>
+                <tr>
+                  <th style={styles.th}>Type</th>
+                  <th style={styles.th}>Amount</th>
+                  <th style={styles.th}>Submitted</th>
+                  <th style={styles.th}>Status</th>
+                  <th style={styles.th}>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {approvals.map((a) => (
+                  <tr key={a.id} style={styles.tr}>
+                    <td style={styles.td}>{a.type}</td>
+                    <td style={{ ...styles.td, fontWeight: 600 }}>{a.amount ? `${formCurrency || "KES"} ${a.amount.toLocaleString()}` : "—"}</td>
+                    <td style={styles.td}>{new Date(a.submitted_at).toLocaleDateString()}</td>
+                    <td style={styles.td}>
+                      <span style={{
+                        padding: "4px 8px", borderRadius: "4px", fontSize: "12px",
+                        background: a.status === "approved" ? "#ECFDF5" : a.status === "rejected" ? "#FEF2F2" : "#F3F4F6",
+                        color: a.status === "approved" ? "#059669" : a.status === "rejected" ? "#DC2626" : "#D97706",
+                      }}>{a.status}</span>
+                    </td>
+                    <td style={styles.td}>
+                      {a.status === "pending" && (hasRole("project_manager") || hasRole("finance")) && (
+                        <button className="btn btn-sm btn-secondary" onClick={() => { setShowFinanceApprove(a.id); setApproveComment(""); }}>Review</button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {payments.length > 0 && (
         <div style={{ marginTop: "32px" }}>
@@ -443,6 +601,47 @@ function FinancePage() {
         <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
           <button className="btn btn-secondary" onClick={() => { setShowCreatePayment(false); resetPaymentForm(); }}>Cancel</button>
           <button className="btn btn-primary" onClick={createPayment}>Record Payment</button>
+        </div>
+      </Modal>
+
+      <Modal isOpen={showCreateFund} onClose={() => { setShowCreateFund(false); resetFundForm(); }} title="Receive Fund">
+        <label style={styles.label}>Source *</label>
+        <input className="input" value={fundSource} onChange={(e) => setFundSource(e.target.value)} style={{ marginBottom: "12px" }} />
+        <div style={{ display: "flex", gap: "12px" }}>
+          <div style={{ flex: 1 }}>
+            <label style={styles.label}>Amount *</label>
+            <input className="input" type="number" value={fundAmount} onChange={(e) => setFundAmount(e.target.value)} style={{ marginBottom: "12px" }} />
+          </div>
+          <div style={{ flex: 1 }}>
+            <label style={styles.label}>Currency</label>
+            <input className="input" value={fundCurrency} onChange={(e) => setFundCurrency(e.target.value)} style={{ marginBottom: "12px" }} />
+          </div>
+        </div>
+        <div style={{ display: "flex", gap: "12px" }}>
+          <div style={{ flex: 1 }}>
+            <label style={styles.label}>Type</label>
+            <select className="input" value={fundType} onChange={(e) => setFundType(e.target.value)} style={{ marginBottom: "12px" }}>
+              <option value="capital">Capital</option>
+              <option value="grant">Grant</option>
+              <option value="loan">Loan</option>
+              <option value="revenue">Revenue</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+          <div style={{ flex: 1 }}>
+            <label style={styles.label}>Date Received</label>
+            <input type="date" className="input" value={fundDate} onChange={(e) => setFundDate(e.target.value)} style={{ marginBottom: "12px" }} />
+          </div>
+        </div>
+        <label style={styles.label}>Reference</label>
+        <input className="input" value={fundRef} onChange={(e) => setFundRef(e.target.value)} placeholder="Reference number" style={{ marginBottom: "12px" }} />
+        <label style={styles.label}>Document Path</label>
+        <input className="input" value={fundDoc} onChange={(e) => setFundDoc(e.target.value)} placeholder="Evidence file path" style={{ marginBottom: "12px" }} />
+        <label style={styles.label}>Description</label>
+        <textarea className="input" rows={2} value={fundDesc} onChange={(e) => setFundDesc(e.target.value)} style={{ marginBottom: "12px" }} />
+        <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
+          <button className="btn btn-secondary" onClick={() => { setShowCreateFund(false); resetFundForm(); }}>Cancel</button>
+          <button className="btn btn-primary" onClick={createFund}>Receive Fund</button>
         </div>
       </Modal>
     </div>

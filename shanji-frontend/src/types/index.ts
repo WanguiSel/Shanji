@@ -390,6 +390,57 @@ export interface Payment {
   created_at: string;
 }
 
+export interface Fund {
+  id: string;
+  project_id: string;
+  source: string;
+  funding_type: string;
+  amount: number;
+  currency: string;
+  date_received: string;
+  reference: string | null;
+  document_path: string | null;
+  status: string;
+  description: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface FinanceApproval {
+  id: string;
+  project_id: string;
+  expense_id: string | null;
+  payment_id: string | null;
+  requester_id: string;
+  approver_id: string | null;
+  type: string;
+  status: string;
+  reason: string | null;
+  comment: string | null;
+  amount: number | null;
+  submitted_at: string;
+  decided_at: string | null;
+  created_at: string;
+}
+
+export interface NearMiss {
+  id: string;
+  project_id: string;
+  report_date: string;
+  location: string | null;
+  description: string;
+  risk_level: string;
+  category: string | null;
+  responsible_person: string | null;
+  mitigation: string | null;
+  due_date: string | null;
+  status: string;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface SiteReport {
   id: string;
   project_id: string;

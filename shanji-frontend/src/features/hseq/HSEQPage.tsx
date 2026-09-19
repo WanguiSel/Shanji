@@ -2,11 +2,11 @@ import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../contexts/AuthContext";
-import { Card } from "../../components/Card";
+import { Card, StatCard } from "../../components/Card";
 import { Loading, EmptyState } from "../../components/Loading";
 import { Modal } from "../../components/Modal";
 import { useToast } from "../../hooks/useToast";
-import type { Incident, Inspection, CorrectiveAction } from "../../types";
+import type { Incident, Inspection, CorrectiveAction, NearMiss } from "../../types";
 
 type HTAB = "incidents" | "inspections" | "hazards" | "actions";
 
@@ -19,6 +19,7 @@ function HSEQPage() {
   const [inspections, setInspections] = useState<Inspection[]>([]);
   const [hazards, setHazards] = useState<any[]>([]);
   const [actions, setActions] = useState<CorrectiveAction[]>([]);
+  const [nearMisses, setNearMisses] = useState<NearMiss[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showModal, setShowModal] = useState(false);
@@ -48,16 +49,18 @@ function HSEQPage() {
     if (!id) return;
     setError(null);
     try {
-      const [iR, inspR, hR, aR] = await Promise.all([
+      const [iR, inspR, hR, aR, nmR] = await Promise.all([
         supabase.from("incidents").select("*").eq("project_id", id).order("date_occurred", { ascending: false }),
         supabase.from("inspections").select("*").eq("project_id", id).order("inspection_date", { ascending: false }),
         supabase.from("risks").select("*").eq("project_id", id).eq("category", "hse").order("created_at", { ascending: false }),
         supabase.from("corrective_actions").select("*").eq("project_id", id).order("due_date", { ascending: true }),
+        supabase.from("near_misses").select("*").eq("project_id", id).order("report_date", { ascending: false }),
       ]);
       setIncidents((iR.data || []) as Incident[]);
       setInspections((inspR.data || []) as Inspection[]);
       setHazards(hR.data || []);
       setActions(aR.data || []);
+      setNearMisses((nmR.data || []) as NearMiss[]);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load HSEQ data");
     } finally {
@@ -157,6 +160,17 @@ function HSEQPage() {
     }
   }
 
+  async function updateNearMissStatus(itemId: string, status: string) {
+    const { error } = await supabase.from("near_misses").update({ status }).eq("id", itemId);
+    if (!error) {
+      showToast("success", `Near miss ${status}`);
+      await logActivity("near_miss_updated", `Near miss status changed to ${status}`, "near_miss", itemId);
+      loadAll();
+    } else {
+      showToast("error", "Failed to update near miss");
+    }
+  }
+
   function resetForm() {
     setFormTitle(""); setFormDesc(""); setFormLocation(""); setFormSeverity("medium");
     setFormPeople(""); setFormImmediate(""); setFormCorrective(""); setFormStatus("open");
@@ -189,6 +203,62 @@ function HSEQPage() {
         <Card>
           <EmptyState title="Error" message={error} />
         </Card>
+      )}
+
+      <div style={{ marginTop: "24px", display: "flex", gap: "16px", flexWrap: "wrap" }}>
+        <StatCard title="Open Incidents" value={incidents.filter((i) => i.status === "open" || i.status === "investigating").length} color="#DC2626" />
+        <StatCard title="High/Critical Risks" value={hazards.filter((h: any) => h.risk_score >= 17 || h.risk_score >= 10).length} color="#EF4444" />
+        <StatCard title="Overdue Actions" value={actions.filter((a) => a.due_date && new Date(a.due_date) < new Date()).length} color="#D97706" />
+        <StatCard title="Upcoming Inspections" value={inspections.filter((i) => new Date(i.inspection_date) >= new Date()).length} color="#0D3B2E" />
+        <StatCard title="Non-Compliant" value={inspections.filter((i) => i.compliance_status === "non_compliant").length} color="#DC2626" />
+        <StatCard title="Open Near Misses" value={nearMisses.filter((n) => n.status === "open").length} color="#7C3AED" />
+      </div>
+
+      {/* Near Misses Table */}
+      {nearMisses.length > 0 && (
+        <div style={{ marginTop: "24px" }}>
+          <h2 style={{ fontSize: "18px", marginBottom: "16px" }}>Near Misses</h2>
+          <div style={styles.tableWrap}>
+            <table style={styles.table}>
+              <thead>
+                <tr>
+                  <th style={styles.th}>Report Date</th>
+                  <th style={styles.th}>Location</th>
+                  <th style={styles.th}>Risk Level</th>
+                  <th style={styles.th}>Status</th>
+                  <th style={styles.th}>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {nearMisses.map((nm) => (
+                  <tr key={nm.id} style={styles.tr}>
+                    <td style={styles.td}>{new Date(nm.report_date).toLocaleDateString()}</td>
+                    <td style={styles.td}>{nm.location || "—"}</td>
+                    <td style={styles.td}>
+                      <span style={{
+                        padding: "4px 8px", borderRadius: "4px", fontSize: "12px",
+                        background: nm.risk_level === "critical" ? "#FEF2F2" : nm.risk_level === "high" ? "#FEF3C7" : "#F3F4F6",
+                        color: nm.risk_level === "critical" ? "#DC2626" : nm.risk_level === "high" ? "#D97706" : "#6B7280",
+                      }}>{nm.risk_level}</span>
+                    </td>
+                    <td style={styles.td}>
+                      <span style={{
+                        padding: "4px 8px", borderRadius: "4px", fontSize: "12px",
+                        background: nm.status === "closed" ? "#ECFDF5" : nm.status === "mitigated" ? "#ECFDF5" : "#F3F4F6",
+                        color: nm.status === "closed" ? "#059669" : "#D97706",
+                      }}>{nm.status}</span>
+                    </td>
+                    <td style={styles.td}>
+                      {(hasRole("project_manager") || hasRole("ohs")) && nm.status === "open" && (
+                        <button className="btn btn-sm btn-secondary" onClick={() => updateNearMissStatus(nm.id, "mitigated")}>Mitigate</button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
       )}
 
       <div style={styles.tabs}>
@@ -418,6 +488,11 @@ const styles: Record<string, React.CSSProperties> = {
   cardHeader: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "8px" },
   meta: { display: "flex", gap: "12px", fontSize: "12px", color: "#6B7280", flexWrap: "wrap" as const },
   label: { fontSize: "13px", fontWeight: 500, color: "#374151", display: "block", marginBottom: "4px" },
+  tableWrap: { background: "white", borderRadius: "8px", border: "1px solid #E5E7EB", overflow: "hidden" },
+  table: { width: "100%", borderCollapse: "collapse", fontSize: "14px" },
+  th: { padding: "12px 16px", textAlign: "left", fontSize: "12px", fontWeight: 600, color: "#6B7280", textTransform: "uppercase", background: "#F9FAFB", borderBottom: "1px solid #E5E7EB" },
+  td: { padding: "12px 16px", borderBottom: "1px solid #F3F4F6" },
+  tr: { cursor: "pointer" },
 };
 
 export default HSEQPage;
