@@ -6,7 +6,7 @@ import { Card, StatCard } from "../../components/Card";
 import { Loading, EmptyState } from "../../components/Loading";
 import { Modal } from "../../components/Modal";
 import { useToast } from "../../hooks/useToast";
-import type { Expense, Budget } from "../../types";
+import type { Expense, Budget, Payment } from "../../types";
 
 const EXPENSE_CATEGORIES = [
   "Transport", "Accommodation", "Meals", "Equipment", "Materials",
@@ -18,9 +18,11 @@ function FinancePage() {
   const { user, hasRole } = useAuth();
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [budgets, setBudgets] = useState<Budget[]>([]);
+  const [payments, setPayments] = useState<Payment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
+  const [showCreatePayment, setShowCreatePayment] = useState(false);
   const [showApprove, setShowApprove] = useState<string | null>(null);
   const [approveComment, setApproveComment] = useState("");
   const [formTitle, setFormTitle] = useState("");
@@ -31,6 +33,12 @@ function FinancePage() {
   const [formDesc, setFormDesc] = useState("");
   const [formReceipt, setFormReceipt] = useState("");
   const [formTaskId, setFormTaskId] = useState("");
+  const [payAmount, setPayAmount] = useState("");
+  const [payMethod, setPayMethod] = useState("");
+  const [payDate, setPayDate] = useState("");
+  const [payReference, setPayReference] = useState("");
+  const [payExpenseId, setPayExpenseId] = useState("");
+  const [paySupplierId, setPaySupplierId] = useState("");
   const { toasts, showToast } = useToast();
 
   useEffect(() => { loadData(); }, [id]);
@@ -39,12 +47,14 @@ function FinancePage() {
     if (!id) return;
     setError(null);
     try {
-      const [expR, budR] = await Promise.all([
+      const [expR, budR, payR] = await Promise.all([
         supabase.from("expenses").select("*").eq("project_id", id).order("created_at", { ascending: false }),
         supabase.from("budgets").select("*").eq("project_id", id),
+        supabase.from("payments").select("*").eq("project_id", id).order("created_at", { ascending: false }),
       ]);
       setExpenses((expR.data || []) as Expense[]);
       setBudgets((budR.data || []) as Budget[]);
+      setPayments((payR.data || []) as Payment[]);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load finance data");
     } finally {
@@ -103,6 +113,48 @@ function FinancePage() {
     }
   }
 
+  async function createPayment() {
+    if (!id || !payAmount || !payMethod || !payDate) return;
+    const { data, error } = await supabase.from("payments").insert({
+      project_id: id,
+      expense_id: payExpenseId || null,
+      supplier_id: paySupplierId || null,
+      amount: parseFloat(payAmount),
+      currency: "KES",
+      payment_method: payMethod,
+      payment_date: payDate,
+      reference_number: payReference || null,
+      status: "completed",
+    }).select().single();
+    if (!error) {
+      showToast("success", "Payment recorded");
+      await logActivity("payment_created", `Payment "${data.reference_number || data.id}" of ${data.amount} ${data.currency} recorded`, "payment", data.id);
+      setShowCreatePayment(false);
+      resetPaymentForm();
+      loadData();
+    } else {
+      showToast("error", "Failed to record payment");
+    }
+  }
+
+  async function updatePaymentStatus(paymentId: string, status: string) {
+    const { error } = await supabase.from("payments").update({
+      status,
+    }).eq("id", paymentId);
+    if (!error) {
+      showToast("success", `Payment ${status}`);
+      await logActivity("payment_updated", `Payment ${status}`, "payment", paymentId);
+      loadData();
+    } else {
+      showToast("error", "Failed to update payment");
+    }
+  }
+
+  function resetPaymentForm() {
+    setPayAmount(""); setPayMethod(""); setPayDate("");
+    setPayReference(""); setPayExpenseId(""); setPaySupplierId("");
+  }
+
   function resetForm() {
     setFormTitle(""); setFormCategory("Other"); setFormAmount("");
     setFormCurrency("KES"); setFormDate(""); setFormDesc("");
@@ -111,10 +163,14 @@ function FinancePage() {
 
   const totalBudget = budgets.reduce((s, b) => s + (b.amount || 0), 0);
   const totalSpent = expenses.reduce((s, e) => s + (e.amount || 0), 0);
+  const totalPaid = payments.reduce((s, p) => s + (p.amount || 0), 0);
   const remaining = totalBudget - totalSpent;
   const pendingExpenses = expenses.filter((e) => e.approval_status === "pending");
   const approvedExpenses = expenses.filter((e) => e.approval_status === "approved");
   const rejectedExpenses = expenses.filter((e) => e.approval_status === "rejected");
+  const pendingPayments = payments.filter((p) => p.status === "pending");
+  const completedPayments = payments.filter((p) => p.status === "completed");
+  const failedPayments = payments.filter((p) => p.status === "failed");
   const categorySpending = EXPENSE_CATEGORIES.map((cat) => ({
     category: cat,
     spent: expenses.filter((e) => e.expense_category === cat).reduce((s, e) => s + (e.amount || 0), 0),
@@ -130,7 +186,10 @@ function FinancePage() {
           <p style={{ color: "#6B7280", fontSize: "14px", marginTop: "4px" }}>Budget, expenses, and financial accountability</p>
         </div>
         {(hasRole("project_manager") || hasRole("finance") || hasRole("site_supervisor")) && (
-          <button className="btn btn-primary" onClick={() => setShowCreate(true)}>+ New Expense</button>
+          <div style={{ display: "flex", gap: "8px" }}>
+            <button className="btn btn-primary" onClick={() => setShowCreate(true)}>+ New Expense</button>
+            <button className="btn btn-secondary" onClick={() => setShowCreatePayment(true)}>Record Payment</button>
+          </div>
         )}
       </div>
 
@@ -150,6 +209,12 @@ function FinancePage() {
         <StatCard title="Pending" value={pendingExpenses.length} subtitle="Awaiting approval" color="#D97706" />
         <StatCard title="Approved" value={approvedExpenses.length} subtitle="Approved expenses" color="#059669" />
         <StatCard title="Rejected" value={rejectedExpenses.length} subtitle="Rejected expenses" color="#DC2626" />
+      </div>
+
+      <div style={{ marginTop: "24px", display: "flex", gap: "16px", flexWrap: "wrap" }}>
+        <StatCard title="Total Paid" value={`KES ${totalPaid.toLocaleString()}`} color="#059669" />
+        <StatCard title="Pending Payments" value={pendingPayments.length} subtitle="Awaiting processing" color="#D97706" />
+        <StatCard title="Failed" value={failedPayments.length} subtitle="Failed payments" color="#DC2626" />
       </div>
 
       <div style={{ marginTop: "24px" }}>
@@ -251,6 +316,56 @@ function FinancePage() {
         )}
       </div>
 
+      {payments.length > 0 && (
+        <div style={{ marginTop: "32px" }}>
+          <h2 style={{ fontSize: "18px", marginBottom: "16px" }}>Payments</h2>
+          <div style={styles.tableWrap}>
+            <table style={styles.table}>
+              <thead>
+                <tr>
+                  <th style={styles.th}>Reference</th>
+                  <th style={styles.th}>Amount</th>
+                  <th style={styles.th}>Method</th>
+                  <th style={styles.th}>Date</th>
+                  <th style={styles.th}>Status</th>
+                  <th style={styles.th}>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {payments.map((p) => (
+                  <tr key={p.id} style={styles.tr}>
+                    <td style={styles.td}>{p.reference_number || p.id?.slice(0, 8)}</td>
+                    <td style={{ ...styles.td, fontWeight: 600 }}>{p.currency || "KES"} {(p.amount || 0).toLocaleString()}</td>
+                    <td style={styles.td}>{p.payment_method || "—"}</td>
+                    <td style={styles.td}>{p.payment_date || "—"}</td>
+                    <td style={styles.td}>
+                      <span style={{
+                        padding: "4px 8px", borderRadius: "4px", fontSize: "12px",
+                        background: p.status === "completed" ? "#ECFDF5" : p.status === "failed" ? "#FEF2F2" : p.status === "refunded" ? "#FEF3C7" : "#F3F4F6",
+                        color: p.status === "completed" ? "#059669" : p.status === "failed" ? "#DC2626" : p.status === "refunded" ? "#D97706" : "#D97706",
+                      }}>
+                        {p.status}
+                      </span>
+                    </td>
+                    <td style={styles.td}>
+                      {p.status === "pending" && (hasRole("project_manager") || hasRole("finance")) && (
+                        <button className="btn btn-sm btn-secondary" onClick={() => updatePaymentStatus(p.id, "completed")}>Complete</button>
+                      )}
+                      {p.status === "completed" && (hasRole("project_manager") || hasRole("finance")) && (
+                        <button className="btn btn-sm btn-secondary" onClick={() => updatePaymentStatus(p.id, "refunded")}>Refund</button>
+                      )}
+                      {(p.status === "pending" || p.status === "completed") && (hasRole("project_manager") || hasRole("finance")) && (
+                        <button className="btn btn-sm btn-secondary" style={{ color: "#DC2626", borderColor: "#FECACA" }} onClick={() => updatePaymentStatus(p.id, "failed")}>Fail</button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
       <Modal isOpen={showCreate} onClose={() => setShowCreate(false)} title="New Expense">
         <label style={styles.label}>Title *</label>
         <input className="input" value={formTitle} onChange={(e) => setFormTitle(e.target.value)} style={{ marginBottom: "12px" }} />
@@ -297,6 +412,37 @@ function FinancePage() {
           <button className="btn btn-secondary" onClick={() => setShowApprove(null)}>Cancel</button>
           <button className="btn btn-secondary" style={{ color: "#DC2626", borderColor: "#FECACA" }} onClick={() => showApprove && approveExpense(showApprove, false)}>Reject</button>
           <button className="btn btn-primary" onClick={() => showApprove && approveExpense(showApprove, true)}>Approve</button>
+        </div>
+      </Modal>
+
+      <Modal isOpen={showCreatePayment} onClose={() => { setShowCreatePayment(false); resetPaymentForm(); }} title="Record Payment">
+        <label style={styles.label}>Amount *</label>
+        <input className="input" type="number" value={payAmount} onChange={(e) => setPayAmount(e.target.value)} style={{ marginBottom: "12px" }} />
+        <div style={{ display: "flex", gap: "12px" }}>
+          <div style={{ flex: 1 }}>
+            <label style={styles.label}>Method *</label>
+            <select className="input" value={payMethod} onChange={(e) => setPayMethod(e.target.value)} style={{ marginBottom: "12px" }}>
+              <option value="">Select method</option>
+              <option value="bank_transfer">Bank Transfer</option>
+              <option value="cash">Cash</option>
+              <option value="cheque">Cheque</option>
+              <option value="mobile_money">Mobile Money</option>
+            </select>
+          </div>
+          <div style={{ flex: 1 }}>
+            <label style={styles.label}>Date *</label>
+            <input type="date" className="input" value={payDate} onChange={(e) => setPayDate(e.target.value)} style={{ marginBottom: "12px" }} />
+          </div>
+        </div>
+        <label style={styles.label}>Expense ID (optional)</label>
+        <input className="input" value={payExpenseId} onChange={(e) => setPayExpenseId(e.target.value)} placeholder="Linked expense ID" style={{ marginBottom: "12px" }} />
+        <label style={styles.label}>Supplier ID (optional)</label>
+        <input className="input" value={paySupplierId} onChange={(e) => setPaySupplierId(e.target.value)} placeholder="Supplier ID" style={{ marginBottom: "12px" }} />
+        <label style={styles.label}>Reference Number</label>
+        <input className="input" value={payReference} onChange={(e) => setPayReference(e.target.value)} placeholder="Payment reference" style={{ marginBottom: "12px" }} />
+        <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
+          <button className="btn btn-secondary" onClick={() => { setShowCreatePayment(false); resetPaymentForm(); }}>Cancel</button>
+          <button className="btn btn-primary" onClick={createPayment}>Record Payment</button>
         </div>
       </Modal>
     </div>
