@@ -17,6 +17,7 @@ import ProcurementPage from "./features/procurement/ProcurementPage"
 import FinancePage from "./features/finance/FinancePage"
 import EvidencePage from "./features/evidence/EvidencePage"
 import SitePage from "./features/site/SitePage"
+import HSEQPage from "./features/hseq/HSEQPage"
 import DocumentsPage from "./features/documents/DocumentsPage"
 import NotificationsPage from "./features/notifications/NotificationsPage"
 import ReportsPage from "./features/reports/ReportsPage"
@@ -47,6 +48,7 @@ function App() {
                   <Route path="/projects/:id/finance" element={<FinancePage />} />
                   <Route path="/projects/:id/evidence" element={<EvidencePage />} />
                   <Route path="/projects/:id/site" element={<SitePage />} />
+                  <Route path="/projects/:id/hseq" element={<HSEQPage />} />
                   <Route path="/projects/:id/documents" element={<DocumentsPage />} />
                   <Route path="/projects/:id/notifications" element={<NotificationsPage />} />
                   <Route path="/projects/:id/reports" element={<ReportsPage />} />

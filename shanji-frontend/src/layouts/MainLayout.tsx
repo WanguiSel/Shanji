@@ -30,6 +30,7 @@ function MainLayout() {
     { name: "Procurement", path: `/projects/${projectId}/procurement` },
     { name: "Finance", path: `/projects/${projectId}/finance` },
     { name: "Site", path: `/projects/${projectId}/site` },
+    { name: "HSEQ", path: `/projects/${projectId}/hseq` },
     { name: "Evidence", path: `/projects/${projectId}/evidence` },
     { name: "Documents", path: `/projects/${projectId}/documents` },
     { name: "Approvals", path: `/projects/${projectId}/approvals` },
