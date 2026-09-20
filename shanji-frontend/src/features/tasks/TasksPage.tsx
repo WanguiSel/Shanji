@@ -12,34 +12,10 @@ function TasksPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();
-<<<<<<< ours
-<<<<<<< ours
-<<<<<<< ours
-<<<<<<< ours
   const { toasts, showToast, removeToast } = useToast();
   const [tasks, setTasks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-=======
-  const { toasts, showToast } = useToast();
-  const [tasks, setTasks] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
->>>>>>> theirs
-=======
-  const { toasts, showToast } = useToast();
-  const [tasks, setTasks] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
->>>>>>> theirs
-=======
-  const { toasts, showToast } = useToast();
-  const [tasks, setTasks] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
->>>>>>> theirs
-=======
-  const { toasts, showToast } = useToast();
-  const [tasks, setTasks] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
->>>>>>> theirs
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newTaskTitle, setNewTaskTitle] = useState("");
   const [newTaskPriority, setNewTaskPriority] = useState("medium");
@@ -72,7 +48,6 @@ function TasksPage() {
     } finally {
       setLoading(false);
     }
-<<<<<<< ours
   };
 
   const logActivity = async (action: string, description: string) => {
@@ -89,27 +64,6 @@ function TasksPage() {
     }).then(({ error }) => { if (error) console.error("Activity log failed:", error); });
   };
 
-=======
-    const wpIds = wpData.map((w) => w.id);
-    const { data } = await supabase
-      .from("workplan_items")
-      .select("*")
-      .in("workplan_id", wpIds)
-      .order("sort_order");
-    setTasks((data || []) as any[]);
-    setLoading(false);
-  };
-
-<<<<<<< ours
-<<<<<<< ours
-<<<<<<< ours
->>>>>>> theirs
-=======
->>>>>>> theirs
-=======
->>>>>>> theirs
-=======
->>>>>>> theirs
   const createTask = async () => {
     if (!id || !newTaskTitle.trim()) return;
     const { data: wpData } = await supabase
@@ -145,19 +99,7 @@ function TasksPage() {
       setNewTaskResponsibleRole("");
       setNewTaskResponsibleUser("");
       showToast("success", "Task created");
-<<<<<<< ours
-<<<<<<< ours
-<<<<<<< ours
-<<<<<<< ours
       await logActivity("task_created", `Task "${newTaskTitle.trim()}" created`);
-=======
->>>>>>> theirs
-=======
->>>>>>> theirs
-=======
->>>>>>> theirs
-=======
->>>>>>> theirs
       loadTasks();
     } else {
       showToast("error", "Failed to create task");
@@ -165,23 +107,7 @@ function TasksPage() {
   };
 
   const updateTask = async (taskId: string, updates: Partial<any>) => {
-<<<<<<< ours
-<<<<<<< ours
-<<<<<<< ours
-<<<<<<< ours
     const { data: taskData, error } = await supabase
-=======
-    const { error } = await supabase
->>>>>>> theirs
-=======
-    const { error } = await supabase
->>>>>>> theirs
-=======
-    const { error } = await supabase
->>>>>>> theirs
-=======
-    const { error } = await supabase
->>>>>>> theirs
       .from("workplan_items")
       .update(updates)
       .eq("id", taskId)
@@ -190,19 +116,7 @@ function TasksPage() {
 
     if (!error) {
       showToast("success", "Task updated");
-<<<<<<< ours
-<<<<<<< ours
-<<<<<<< ours
-<<<<<<< ours
       await logActivity("task_updated", `Task "${taskData?.task_title || taskId}" updated`);
-=======
->>>>>>> theirs
-=======
->>>>>>> theirs
-=======
->>>>>>> theirs
-=======
->>>>>>> theirs
       loadTasks();
       return true;
     } else {
@@ -212,10 +126,6 @@ function TasksPage() {
   };
 
   const deleteTask = async (taskId: string) => {
-<<<<<<< ours
-<<<<<<< ours
-<<<<<<< ours
-<<<<<<< ours
     const { data: taskData, error } = await supabase
       .from("workplan_items")
       .delete()
@@ -226,30 +136,6 @@ function TasksPage() {
     if (!error) {
       showToast("success", "Task deleted");
       await logActivity("task_deleted", `Task "${taskData?.task_title || taskId}" deleted`);
-=======
-=======
->>>>>>> theirs
-=======
->>>>>>> theirs
-=======
->>>>>>> theirs
-    const { error } = await supabase
-      .from("workplan_items")
-      .delete()
-      .eq("id", taskId);
-
-    if (!error) {
-      showToast("success", "Task deleted");
-<<<<<<< ours
-<<<<<<< ours
-<<<<<<< ours
->>>>>>> theirs
-=======
->>>>>>> theirs
-=======
->>>>>>> theirs
-=======
->>>>>>> theirs
       loadTasks();
       return true;
     } else {
@@ -263,19 +149,7 @@ function TasksPage() {
     if (task.created_by === user.id) return true;
     if (task.responsible_user_id === user.id) return true;
     const projectRoles = user.project_roles || {};
-<<<<<<< ours
-<<<<<<< ours
-<<<<<<< ours
-<<<<<<< ours
     if (!id) return false;
-=======
->>>>>>> theirs
-=======
->>>>>>> theirs
-=======
->>>>>>> theirs
-=======
->>>>>>> theirs
     if (projectRoles[id] && (projectRoles[id] === "project_manager" || projectRoles[id] === "site_supervisor")) return true;
     if (task.responsible_role === "assistant" && user.role === "assistant") return true;
     return false;
@@ -286,19 +160,7 @@ function TasksPage() {
   };
 
   useEffect(() => {
-<<<<<<< ours
-<<<<<<< ours
-<<<<<<< ours
-<<<<<<< ours
     setError(null);
-=======
->>>>>>> theirs
-=======
->>>>>>> theirs
-=======
->>>>>>> theirs
-=======
->>>>>>> theirs
     loadTasks();
   }, [id]);
 

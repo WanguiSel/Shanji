@@ -207,38 +207,12 @@ function DependencyEngine() {
       .from("activity_logs")
       .insert({
         project_id: id,
-<<<<<<< ours
-<<<<<<< ours
-<<<<<<< ours
-<<<<<<< ours
         actor_id: user?.id,
         action: "dependency_override",
         entity_type: "workplan_item",
         entity_id: taskId,
         description: `PM override: Blocked task ${taskId} released due to dependency block. Reason: ${reason}`,
         metadata: {},
-=======
-=======
->>>>>>> theirs
-=======
->>>>>>> theirs
-=======
->>>>>>> theirs
-        user_id: user?.id,
-        action: "dependency_override",
-        entity_type: "workplan_item",
-        entity_id: taskId,
-        details: `PM override: Blocked task ${taskId} released due to dependency block. Reason: ${reason}`,
-<<<<<<< ours
-<<<<<<< ours
-<<<<<<< ours
->>>>>>> theirs
-=======
->>>>>>> theirs
-=======
->>>>>>> theirs
-=======
->>>>>>> theirs
         created_at: new Date().toISOString(),
       });
 
@@ -253,24 +227,8 @@ function DependencyEngine() {
     header: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '24px' },
     grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))', gap: '16px' },
     cardHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' },
-    label: { fontSize: '13px', fontWeight: 500, color: '#374151', display: 'block', marginBottom: '4px' },
-<<<<<<< ours
-<<<<<<< ours
-<<<<<<< ours
-<<<<<<< ours
-=======
-  };
->>>>>>> theirs
-=======
-  };
->>>>>>> theirs
-=======
-  };
->>>>>>> theirs
-=======
-  };
->>>>>>> theirs
-  };
+  label: { fontSize: '13px', fontWeight: 500, color: '#374151', display: 'block', marginBottom: '4px' },
+};
 
   useEffect(() => {
     setError(null);
