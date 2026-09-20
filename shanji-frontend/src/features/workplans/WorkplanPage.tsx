@@ -17,7 +17,10 @@ function WorkplanPage() {
   const [tasks, setTasks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 <<<<<<< ours
+<<<<<<< ours
   const [error, setError] = useState<string | null>(null);
+=======
+>>>>>>> theirs
 =======
 >>>>>>> theirs
   const [showCreateVersionModal, setShowCreateVersionModal] = useState(false);
@@ -41,7 +44,11 @@ function WorkplanPage() {
 
   const isProjectManager = () => {
 <<<<<<< ours
+<<<<<<< ours
     if (!user?.project_roles || !id) return false;
+=======
+    if (!user?.project_roles) return false;
+>>>>>>> theirs
 =======
     if (!user?.project_roles) return false;
 >>>>>>> theirs
@@ -50,7 +57,11 @@ function WorkplanPage() {
 
   const isAssistant = () => {
 <<<<<<< ours
+<<<<<<< ours
     if (!user?.project_roles || !id) return false;
+=======
+    if (!user?.project_roles) return false;
+>>>>>>> theirs
 =======
     if (!user?.project_roles) return false;
 >>>>>>> theirs
@@ -300,6 +311,15 @@ function WorkplanPage() {
     setHistory(data || []);
   };
 
+  const loadHistory = async (workplanId: string) => {
+    const { data } = await supabase
+      .from("workplan_history")
+      .select("*")
+      .eq("project_id", id)
+      .order("version_sequence", { ascending: false });
+    setHistory(data || []);
+  };
+
   const loadTasks = async (workplanId: string) => {
     const { data } = await supabase
       .from("workplan_items")
@@ -446,6 +466,9 @@ function WorkplanPage() {
     }
   };
 
+<<<<<<< ours
+>>>>>>> theirs
+=======
 >>>>>>> theirs
   const rejectWorkplan = async (workplan: any) => {
     if (!canRejectWorkplan(workplan)) {
@@ -467,6 +490,7 @@ function WorkplanPage() {
         .insert({
           project_id: id,
 <<<<<<< ours
+<<<<<<< ours
           actor_id: user?.id,
           action: "workplan_rejected",
           entity_type: "workplan",
@@ -474,11 +498,16 @@ function WorkplanPage() {
           description: `Workplan ${workplan.version} rejected by PM. Reason: ${rejectReason}`,
           metadata: {},
 =======
+=======
+>>>>>>> theirs
           user_id: user?.id,
           action: "workplan_rejected",
           entity_type: "workplan",
           entity_id: workplan.id,
           details: `Workplan ${workplan.version} rejected by PM. Reason: ${rejectReason}`,
+<<<<<<< ours
+>>>>>>> theirs
+=======
 >>>>>>> theirs
           created_at: new Date().toISOString(),
         });
@@ -492,6 +521,10 @@ function WorkplanPage() {
     }
   };
 <<<<<<< ours
+<<<<<<< ours
+=======
+
+>>>>>>> theirs
 =======
 
 >>>>>>> theirs
@@ -518,9 +551,12 @@ function WorkplanPage() {
 
 
 
+
+
   return (
     <div>
       <button onClick={() => navigate(-1)} className="btn btn-secondary" style={{ marginBottom: "24px" }}>← Back</button>
+<<<<<<< ours
 <<<<<<< ours
 
       {workplan ? (
@@ -696,11 +732,100 @@ function WorkplanPage() {
             )}
           </div>
 
+=======
+
+      {workplan ? (
+        <div>
+          <div style={{ marginBottom: "32px" }}>
+            <h1>{workplan?.projects?.project_name || 'Workplan'}</h1>
+            <p style={{ color: "#6B7280", fontSize: "14px", marginTop: "4px" }}>{workplan?.title}</p>
+            <div style={{ marginTop: "16px", display: "flex", gap: "16px", flexWrap: "wrap" }}>
+              <div><span style={{ fontSize: "13px", color: "#6B7280" }}>Version:</span> <span style={{ fontWeight: 600 }}>{workplan?.version}</span></div>
+              <div><span style={{ fontSize: "13px", color: "#6B7280" }}>Status:</span> <span style={{ fontWeight: 600 }}>{workplan?.status}</span></div>
+              <div><span style={{ fontSize: "13px", color: "#6B7280" }}>Approved by:</span> <span style={{ fontWeight: 600 }}>{workplan?.approved_by ? workplan.approved_by.slice(0, 8) : 'Not approved'}</span></div>
+            </div>
+
+          {canEditWorkplan(workplan) && (
+            <div style={{ marginBottom: "24px", display: "flex", gap: "8px" }}>
+              {workplan?.status === 'draft' && canSubmitWorkplan(workplan) && (
+                <button
+                  className="btn btn-primary"
+                  onClick={() => setShowSubmitModal(true)}
+                >
+                  Submit for Review
+                </button>
+              )}
+              }
+              {canReviewWorkplan(workplan) && (
+                <button
+                  className="btn btn-primary"
+                  onClick={() => setShowApproveModal(true)}
+                >
+                  Approve
+                </button>
+                <button
+                  className="btn btn-secondary"
+                  onClick={() => setShowRejectModal(true)}
+                >
+                  Reject
+                </button>
+              )}
+            </div>
+          )}
+
+          <div style={{ marginBottom: "24px" }}>
+            <h2 style={{ fontSize: "18px", fontWeight: 600 }}>Version History</h2>
+            {history.length === 0 ? (
+              <Card>
+                <EmptyState title="No version history" message="No workplan versions found" />
+              </Card>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+                {history.map((hist: any) => (
+                  <Card key={hist.id}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                      <div style={{ flex: 1 }}>
+                        <h3 style={{ fontSize: "16px", fontWeight: 600, marginBottom: "4px" }}>{hist?.version} - {hist?.title}</h3>
+                        <div style={{ fontSize: "13px", color: "#6B7280", marginTop: "4px" }}>
+                          <span>Status: {hist?.status}</span>
+                          <span style={{ margin: "0 8px" }}>•</span>
+                          <span>Created: {new Date(hist?.created_at).toLocaleString()}</span>
+                          {hist?.approved_at && (
+                            <><n                              <span style={{ margin: "0 8px" }}>•</span>
+                              <span>Approved: {new Date(hist?.approved_at).toLocaleString()}</span>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                      <div style={{ textAlign: "right" }}>
+                        {hist?.is_archived && (
+                          <div style={{ fontSize: "12px", color: "#9CA3AF", fontStyle: "italic" }}>Archived</div>
+                        )}
+                        {canEditWorkplan(workplan) && !hist?.is_archived && (
+                          <button
+                            className="btn btn-sm btn-secondary"
+                            onClick={() => { setSelectedHistory(hist); setShowEditDraftModal(true); setEditTitle(hist?.title); setEditDescription(hist?.description || ""); }}
+                          >
+                            Edit
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </Card>
+                )}
+              </div>
+            )}
+          </div>
+
+>>>>>>> theirs
           <div style={{ marginBottom: "24px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <h2 style={{ fontSize: "18px", fontWeight: 600 }}>Tasks</h2>
             <button className="btn btn-primary" onClick={() => navigate(`/projects/${workplan?.project_id}/tasks/new`)}>+ New Task</button>
           </div>
 
+<<<<<<< ours
+>>>>>>> theirs
+=======
 >>>>>>> theirs
           {tasks.length === 0 ? (
             <Card>
@@ -740,7 +865,10 @@ function WorkplanPage() {
             </div>
           )}
 <<<<<<< ours
+<<<<<<< ours
          </div>
+=======
+>>>>>>> theirs
 =======
 >>>>>>> theirs
         </div>
@@ -784,6 +912,7 @@ function WorkplanPage() {
             </div>
           </div>
 <<<<<<< ours
+<<<<<<< ours
         </div>
       )}
 
@@ -804,6 +933,11 @@ function WorkplanPage() {
         </div>
       )}
 
+=======
+        </div>
+      )}
+
+>>>>>>> theirs
       {showSubmitModal && (
         <div style={{ position: "fixed", inset: "0", background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }} onClick={() => setShowSubmitModal(false)}>
           <div style={{ background: "white", padding: "32px", borderRadius: "12px", width: "560px", maxHeight: "90vh", overflow: "auto" }} onClick={(e) => e.stopPropagation()}>
@@ -816,6 +950,9 @@ function WorkplanPage() {
           </div>
       )}
 
+<<<<<<< ours
+>>>>>>> theirs
+=======
 >>>>>>> theirs
       {showApproveModal && (
         <div style={{ position: "fixed", inset: "0", background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }} onClick={() => setShowApproveModal(false)}>
@@ -857,7 +994,10 @@ function WorkplanPage() {
             </div>
           </div>
 <<<<<<< ours
+<<<<<<< ours
         </div>
+=======
+>>>>>>> theirs
 =======
 >>>>>>> theirs
       )}

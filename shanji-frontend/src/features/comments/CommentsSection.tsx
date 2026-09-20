@@ -223,6 +223,7 @@ function CommentsSection({ projectId, relatedType, relatedId }: { projectId: str
         Comments
         {canPostComment() && (
 <<<<<<< ours
+<<<<<<< ours
             <button
               className="btn btn-primary"
               onClick={() => showToast("info", "Type your comment below and submit")}
@@ -231,6 +232,8 @@ function CommentsSection({ projectId, relatedType, relatedId }: { projectId: str
               + New Comment
             </button>
 =======
+=======
+>>>>>>> theirs
           <button
             className="btn btn-primary"
             onClick={() => setShowCreateModal(true)}
@@ -238,6 +241,9 @@ function CommentsSection({ projectId, relatedType, relatedId }: { projectId: str
           >
             + New Comment
           </button>
+<<<<<<< ours
+>>>>>>> theirs
+=======
 >>>>>>> theirs
         )}
       </h3>
@@ -369,7 +375,11 @@ function CommentItem({ comment, canEdit, canDelete, onUpdate, onDelete, onReply 
           <button
             className="btn btn-sm btn-secondary"
 <<<<<<< ours
+<<<<<<< ours
             onClick={() => onReply(comment.id)}
+=======
+            onClick={() => setReplyingTo(comment.id)}
+>>>>>>> theirs
 =======
             onClick={() => setReplyingTo(comment.id)}
 >>>>>>> theirs
@@ -379,7 +389,11 @@ function CommentItem({ comment, canEdit, canDelete, onUpdate, onDelete, onReply 
           </button>
         )}
 <<<<<<< ours
+<<<<<<< ours
         {canEdit && !comment.parent_id && (
+=======
+        {canEdit(comment) && !comment.parent_id && (
+>>>>>>> theirs
 =======
         {canEdit(comment) && !comment.parent_id && (
 >>>>>>> theirs
@@ -392,7 +406,11 @@ function CommentItem({ comment, canEdit, canDelete, onUpdate, onDelete, onReply 
           </button>
         )}
 <<<<<<< ours
+<<<<<<< ours
         {canDelete && (
+=======
+        {canDelete(comment) && (
+>>>>>>> theirs
 =======
         {canDelete(comment) && (
 >>>>>>> theirs
@@ -414,7 +432,11 @@ export default CommentsSection;
 function canPostComment(): boolean {
   const { user } = useAuth();
 <<<<<<< ours
+<<<<<<< ours
   const { id: projectId, relatedType, relatedId } = useParams<{ id: string; relatedType?: string; relatedId?: string }>();
+=======
+  const { id: projectId, relatedType, relatedId } = useParams<{ id: string }>();
+>>>>>>> theirs
 =======
   const { id: projectId, relatedType, relatedId } = useParams<{ id: string }>();
 >>>>>>> theirs

@@ -13,10 +13,16 @@ function TasksPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
 <<<<<<< ours
+<<<<<<< ours
   const { toasts, showToast, removeToast } = useToast();
   const [tasks, setTasks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+=======
+  const { toasts, showToast } = useToast();
+  const [tasks, setTasks] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+>>>>>>> theirs
 =======
   const { toasts, showToast } = useToast();
   const [tasks, setTasks] = useState<any[]>([]);
@@ -82,6 +88,9 @@ function TasksPage() {
     setLoading(false);
   };
 
+<<<<<<< ours
+>>>>>>> theirs
+=======
 >>>>>>> theirs
   const createTask = async () => {
     if (!id || !newTaskTitle.trim()) return;
@@ -119,7 +128,10 @@ function TasksPage() {
       setNewTaskResponsibleUser("");
       showToast("success", "Task created");
 <<<<<<< ours
+<<<<<<< ours
       await logActivity("task_created", `Task "${newTaskTitle.trim()}" created`);
+=======
+>>>>>>> theirs
 =======
 >>>>>>> theirs
       loadTasks();
@@ -130,7 +142,11 @@ function TasksPage() {
 
   const updateTask = async (taskId: string, updates: Partial<any>) => {
 <<<<<<< ours
+<<<<<<< ours
     const { data: taskData, error } = await supabase
+=======
+    const { error } = await supabase
+>>>>>>> theirs
 =======
     const { error } = await supabase
 >>>>>>> theirs
@@ -143,7 +159,10 @@ function TasksPage() {
     if (!error) {
       showToast("success", "Task updated");
 <<<<<<< ours
+<<<<<<< ours
       await logActivity("task_updated", `Task "${taskData?.task_title || taskId}" updated`);
+=======
+>>>>>>> theirs
 =======
 >>>>>>> theirs
       loadTasks();
@@ -156,6 +175,7 @@ function TasksPage() {
 
   const deleteTask = async (taskId: string) => {
 <<<<<<< ours
+<<<<<<< ours
     const { data: taskData, error } = await supabase
       .from("workplan_items")
       .delete()
@@ -167,6 +187,8 @@ function TasksPage() {
       showToast("success", "Task deleted");
       await logActivity("task_deleted", `Task "${taskData?.task_title || taskId}" deleted`);
 =======
+=======
+>>>>>>> theirs
     const { error } = await supabase
       .from("workplan_items")
       .delete()
@@ -174,6 +196,9 @@ function TasksPage() {
 
     if (!error) {
       showToast("success", "Task deleted");
+<<<<<<< ours
+>>>>>>> theirs
+=======
 >>>>>>> theirs
       loadTasks();
       return true;
@@ -189,7 +214,10 @@ function TasksPage() {
     if (task.responsible_user_id === user.id) return true;
     const projectRoles = user.project_roles || {};
 <<<<<<< ours
+<<<<<<< ours
     if (!id) return false;
+=======
+>>>>>>> theirs
 =======
 >>>>>>> theirs
     if (projectRoles[id] && (projectRoles[id] === "project_manager" || projectRoles[id] === "site_supervisor")) return true;
@@ -203,7 +231,10 @@ function TasksPage() {
 
   useEffect(() => {
 <<<<<<< ours
+<<<<<<< ours
     setError(null);
+=======
+>>>>>>> theirs
 =======
 >>>>>>> theirs
     loadTasks();
