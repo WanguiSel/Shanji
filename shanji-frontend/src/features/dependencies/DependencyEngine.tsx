@@ -210,6 +210,7 @@ function DependencyEngine() {
 <<<<<<< ours
 <<<<<<< ours
 <<<<<<< ours
+<<<<<<< ours
         actor_id: user?.id,
         action: "dependency_override",
         entity_type: "workplan_item",
@@ -221,6 +222,8 @@ function DependencyEngine() {
 >>>>>>> theirs
 =======
 >>>>>>> theirs
+=======
+>>>>>>> theirs
         user_id: user?.id,
         action: "dependency_override",
         entity_type: "workplan_item",
@@ -228,6 +231,9 @@ function DependencyEngine() {
         details: `PM override: Blocked task ${taskId} released due to dependency block. Reason: ${reason}`,
 <<<<<<< ours
 <<<<<<< ours
+<<<<<<< ours
+>>>>>>> theirs
+=======
 >>>>>>> theirs
 =======
 >>>>>>> theirs
@@ -251,6 +257,10 @@ function DependencyEngine() {
 <<<<<<< ours
 <<<<<<< ours
 <<<<<<< ours
+<<<<<<< ours
+=======
+  };
+>>>>>>> theirs
 =======
   };
 >>>>>>> theirs

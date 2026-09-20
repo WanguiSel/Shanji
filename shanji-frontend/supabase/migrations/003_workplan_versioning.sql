@@ -11,6 +11,9 @@
 -- 1. Create workplan_history table for versioning/audit storage
 <<<<<<< ours
 <<<<<<< ours
+<<<<<<< ours
+>>>>>>> theirs
+=======
 >>>>>>> theirs
 =======
 >>>>>>> theirs
@@ -41,8 +44,13 @@ CREATE TABLE IF NOT EXISTS workplan_history (
 <<<<<<< ours
 <<<<<<< ours
 <<<<<<< ours
+<<<<<<< ours
 -- ===========================================
 -- RLS
+=======
+-- ============================================
+-- RLS - Replace existing broad policies
+>>>>>>> theirs
 =======
 -- ============================================
 -- RLS - Replace existing broad policies
@@ -63,8 +71,11 @@ ALTER TABLE workplan_history ENABLE ROW LEVEL SECURITY;
 <<<<<<< ours
 <<<<<<< ours
 <<<<<<< ours
+<<<<<<< ours
 -- Only project managers can view history
 =======
+=======
+>>>>>>> theirs
 =======
 >>>>>>> theirs
 =======
@@ -87,6 +98,9 @@ CREATE POLICY "Project members can view workplans" ON workplans
 -- Workplan history: PMs only (read-only)
 <<<<<<< ours
 <<<<<<< ours
+<<<<<<< ours
+>>>>>>> theirs
+=======
 >>>>>>> theirs
 =======
 >>>>>>> theirs
@@ -106,9 +120,12 @@ CREATE POLICY "Project managers can view workplan history" ON workplan_history
 <<<<<<< ours
 <<<<<<< ours
 <<<<<<< ours
+<<<<<<< ours
 -- PM can create versions
 CREATE POLICY "Project managers can create history" ON workplan_history
 =======
+=======
+>>>>>>> theirs
 =======
 >>>>>>> theirs
 =======
@@ -164,6 +181,7 @@ CREATE POLICY "Project managers can archive versions" ON workplan_history
 <<<<<<< ours
 <<<<<<< ours
 <<<<<<< ours
+<<<<<<< ours
 -- ===========================================
 -- TRIGGERS
 =======
@@ -173,6 +191,41 @@ CREATE POLICY "Project managers can archive versions" ON workplan_history
 =======
 -- ============================================
 -- CONSTRAINTS - Approved workplan uniqueness
+=======
+-- ============================================
+-- CONSTRAINTS - Approved workplan uniqueness
+-- ============================================
+
+-- Prevent multiple approved workplans per project
+CREATE UNIQUE INDEX IF NOT EXISTS idx_single_approved_workplan_per_project
+  ON workplans(project_id)
+  WHERE status = 'approved';
+
+-- ============================================
+-- SECURE IMMUTABILITY - Approved workplans cannot be updated
+-- ============================================
+
+-- Use a BEFORE UPDATE trigger for secure immutability
+CREATE OR REPLACE FUNCTION workplan_approved_immutability_check()
+RETURNS TRIGGER AS $
+BEGIN
+  -- Check if updating an approved workplan
+  IF NEW.id IS DISTINCT FROM OLD.id AND (
+    SELECT status FROM workplans WHERE id = NEW.id
+  ) = 'approved' THEN
+    RAISE EXCEPTION 'Approved workplans cannot be updated';
+  END IF;
+  RETURN NEW;
+END;
+$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_workplan_approved_immutability_check
+  BEFORE UPDATE ON workplans
+  FOR EACH ROW EXECUTE FUNCTION workplan_approved_immutability_check();
+
+-- ============================================
+-- SECURE TRIGGER - History archival (SECURITY DEFINER)
+>>>>>>> theirs
 -- ============================================
 
 -- Prevent multiple approved workplans per project
@@ -408,7 +461,10 @@ CREATE INDEX idx_workplan_history_status ON workplan_history(status);
 <<<<<<< ours
 <<<<<<< ours
 <<<<<<< ours
+<<<<<<< ours
 =======
+=======
+>>>>>>> theirs
 =======
 >>>>>>> theirs
 =======
@@ -419,6 +475,9 @@ CREATE INDEX idx_workplans_version ON workplans(version);
 
 <<<<<<< ours
 <<<<<<< ours
+<<<<<<< ours
+>>>>>>> theirs
+=======
 >>>>>>> theirs
 =======
 >>>>>>> theirs

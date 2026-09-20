@@ -225,6 +225,7 @@ function CommentsSection({ projectId, relatedType, relatedId }: { projectId: str
 <<<<<<< ours
 <<<<<<< ours
 <<<<<<< ours
+<<<<<<< ours
             <button
               className="btn btn-primary"
               onClick={() => showToast("info", "Type your comment below and submit")}
@@ -233,6 +234,8 @@ function CommentsSection({ projectId, relatedType, relatedId }: { projectId: str
               + New Comment
             </button>
 =======
+=======
+>>>>>>> theirs
 =======
 >>>>>>> theirs
 =======
@@ -246,6 +249,9 @@ function CommentsSection({ projectId, relatedType, relatedId }: { projectId: str
           </button>
 <<<<<<< ours
 <<<<<<< ours
+<<<<<<< ours
+>>>>>>> theirs
+=======
 >>>>>>> theirs
 =======
 >>>>>>> theirs
@@ -383,7 +389,11 @@ function CommentItem({ comment, canEdit, canDelete, onUpdate, onDelete, onReply 
 <<<<<<< ours
 <<<<<<< ours
 <<<<<<< ours
+<<<<<<< ours
             onClick={() => onReply(comment.id)}
+=======
+            onClick={() => setReplyingTo(comment.id)}
+>>>>>>> theirs
 =======
             onClick={() => setReplyingTo(comment.id)}
 >>>>>>> theirs
@@ -401,7 +411,11 @@ function CommentItem({ comment, canEdit, canDelete, onUpdate, onDelete, onReply 
 <<<<<<< ours
 <<<<<<< ours
 <<<<<<< ours
+<<<<<<< ours
         {canEdit && !comment.parent_id && (
+=======
+        {canEdit(comment) && !comment.parent_id && (
+>>>>>>> theirs
 =======
         {canEdit(comment) && !comment.parent_id && (
 >>>>>>> theirs
@@ -422,7 +436,11 @@ function CommentItem({ comment, canEdit, canDelete, onUpdate, onDelete, onReply 
 <<<<<<< ours
 <<<<<<< ours
 <<<<<<< ours
+<<<<<<< ours
         {canDelete && (
+=======
+        {canDelete(comment) && (
+>>>>>>> theirs
 =======
         {canDelete(comment) && (
 >>>>>>> theirs
@@ -452,7 +470,11 @@ function canPostComment(): boolean {
 <<<<<<< ours
 <<<<<<< ours
 <<<<<<< ours
+<<<<<<< ours
   const { id: projectId, relatedType, relatedId } = useParams<{ id: string; relatedType?: string; relatedId?: string }>();
+=======
+  const { id: projectId, relatedType, relatedId } = useParams<{ id: string }>();
+>>>>>>> theirs
 =======
   const { id: projectId, relatedType, relatedId } = useParams<{ id: string }>();
 >>>>>>> theirs
