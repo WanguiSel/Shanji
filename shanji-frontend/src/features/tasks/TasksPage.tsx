@@ -14,10 +14,16 @@ function TasksPage() {
   const { user } = useAuth();
 <<<<<<< ours
 <<<<<<< ours
+<<<<<<< ours
   const { toasts, showToast, removeToast } = useToast();
   const [tasks, setTasks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+=======
+  const { toasts, showToast } = useToast();
+  const [tasks, setTasks] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+>>>>>>> theirs
 =======
   const { toasts, showToast } = useToast();
   const [tasks, setTasks] = useState<any[]>([]);
@@ -89,6 +95,9 @@ function TasksPage() {
   };
 
 <<<<<<< ours
+<<<<<<< ours
+>>>>>>> theirs
+=======
 >>>>>>> theirs
 =======
 >>>>>>> theirs
@@ -129,7 +138,10 @@ function TasksPage() {
       showToast("success", "Task created");
 <<<<<<< ours
 <<<<<<< ours
+<<<<<<< ours
       await logActivity("task_created", `Task "${newTaskTitle.trim()}" created`);
+=======
+>>>>>>> theirs
 =======
 >>>>>>> theirs
 =======
@@ -143,7 +155,11 @@ function TasksPage() {
   const updateTask = async (taskId: string, updates: Partial<any>) => {
 <<<<<<< ours
 <<<<<<< ours
+<<<<<<< ours
     const { data: taskData, error } = await supabase
+=======
+    const { error } = await supabase
+>>>>>>> theirs
 =======
     const { error } = await supabase
 >>>>>>> theirs
@@ -160,7 +176,10 @@ function TasksPage() {
       showToast("success", "Task updated");
 <<<<<<< ours
 <<<<<<< ours
+<<<<<<< ours
       await logActivity("task_updated", `Task "${taskData?.task_title || taskId}" updated`);
+=======
+>>>>>>> theirs
 =======
 >>>>>>> theirs
 =======
@@ -176,6 +195,7 @@ function TasksPage() {
   const deleteTask = async (taskId: string) => {
 <<<<<<< ours
 <<<<<<< ours
+<<<<<<< ours
     const { data: taskData, error } = await supabase
       .from("workplan_items")
       .delete()
@@ -189,6 +209,8 @@ function TasksPage() {
 =======
 =======
 >>>>>>> theirs
+=======
+>>>>>>> theirs
     const { error } = await supabase
       .from("workplan_items")
       .delete()
@@ -197,6 +219,9 @@ function TasksPage() {
     if (!error) {
       showToast("success", "Task deleted");
 <<<<<<< ours
+<<<<<<< ours
+>>>>>>> theirs
+=======
 >>>>>>> theirs
 =======
 >>>>>>> theirs
@@ -215,7 +240,10 @@ function TasksPage() {
     const projectRoles = user.project_roles || {};
 <<<<<<< ours
 <<<<<<< ours
+<<<<<<< ours
     if (!id) return false;
+=======
+>>>>>>> theirs
 =======
 >>>>>>> theirs
 =======
@@ -232,7 +260,10 @@ function TasksPage() {
   useEffect(() => {
 <<<<<<< ours
 <<<<<<< ours
+<<<<<<< ours
     setError(null);
+=======
+>>>>>>> theirs
 =======
 >>>>>>> theirs
 =======
