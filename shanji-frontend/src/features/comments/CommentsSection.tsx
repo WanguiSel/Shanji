@@ -359,13 +359,21 @@ function CommentItem({ comment, canEdit, canDelete, onUpdate, onDelete, onReply 
         {!comment.parent_id && canPostComment() && (
           <button
             className="btn btn-sm btn-secondary"
+<<<<<<< ours
             onClick={() => onReply(comment.id)}
+=======
+            onClick={() => setReplyingTo(comment.id)}
+>>>>>>> theirs
             style={{ fontSize: '11px' }}
           >
             Reply
           </button>
         )}
+<<<<<<< ours
         {canEdit && !comment.parent_id && (
+=======
+        {canEdit(comment) && !comment.parent_id && (
+>>>>>>> theirs
           <button
             className="btn btn-sm btn-secondary"
             onClick={() => setIsEditing(true)}
@@ -374,7 +382,11 @@ function CommentItem({ comment, canEdit, canDelete, onUpdate, onDelete, onReply 
             Edit
           </button>
         )}
+<<<<<<< ours
         {canDelete && (
+=======
+        {canDelete(comment) && (
+>>>>>>> theirs
           <button
             className="btn btn-sm btn-secondary"
             onClick={() => onDelete(comment.id)}
@@ -392,7 +404,11 @@ export default CommentsSection;
 
 function canPostComment(): boolean {
   const { user } = useAuth();
+<<<<<<< ours
   const { id: projectId, relatedType, relatedId } = useParams<{ id: string; relatedType?: string; relatedId?: string }>();
+=======
+  const { id: projectId, relatedType, relatedId } = useParams<{ id: string }>();
+>>>>>>> theirs
 
   if (!user || !projectId) return false;
 
