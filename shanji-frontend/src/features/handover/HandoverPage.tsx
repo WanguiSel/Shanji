@@ -18,21 +18,37 @@ function HandoverPage() {
 
   async function loadHandover() {
     if (!id) return;
-    const { data } = await supabase.from("handover_records").select("*").eq("project_id", id).single();
+    const { data } = await supabase.from("project_handovers").select("*").eq("project_id", id).maybeSingle();
     setHandover((data as HandoverRecord) || null);
     setLoading(false);
   }
 
   async function createHandover() {
     if (!id) return;
-    const { data } = await supabase.from("handover_records").upsert({
+    const rich = await supabase.from("project_handovers").insert({
       project_id: id,
       status: 'preparation',
-      prepared_by: 'user-id',
+      prepared_by: null,
+      handover_date: new Date().toISOString().slice(0, 10),
     }).select().single();
-    if (!data.error) {
+
+    let data: any = rich.data;
+    let error: any = rich.error;
+    if (error) {
+      const live = await supabase.from("project_handovers").insert({
+        project_id: id,
+        status: 'preparation',
+        handover_date: new Date().toISOString().slice(0, 10),
+      }).select().single();
+      data = live.data;
+      error = live.error;
+    }
+
+    if (!error && data) {
       setHandover(data as HandoverRecord);
       showToast("success", "Handover started");
+    } else {
+      showToast("error", error?.message || "Failed to start handover");
     }
   }
 
@@ -48,17 +64,26 @@ function HandoverPage() {
     const next = statusFlow[handover.status];
     if (!next) return;
     setChecking(true);
-    const { data } = await supabase.from("handover_records").update({ status: next, submitted_at: new Date().toISOString() }).eq("project_id", id).select().single();
-    setHandover(data as HandoverRecord);
+    const rich = await supabase.from("project_handovers").update({ status: next, submitted_at: new Date().toISOString() }).eq("id", handover.id).select().single();
+    let data: any = rich.data;
+    if (rich.error) {
+      const live = await supabase.from("project_handovers").update({ status: next }).eq("id", handover.id).select().single();
+      data = live.data;
+    }
+    if (data) setHandover(data as HandoverRecord);
     setChecking(false);
     showToast("success", `Handover advanced to ${next}`);
   }
 
   async function runChecks() {
     setChecking(true);
-    // Check closure items
-    const { data: items } = await supabase.from("closure_checklist").select("*").eq("project_id", id).eq("required", true).eq("status", "pending");
-    const incomplete = (items || []).filter((i) => i.status === 'pending');
+    const { data: items, error } = await supabase.from("closure_checklist").select("*").eq("project_id", id).eq("required", true).eq("status", "pending");
+    if (error) {
+      showToast("warning", "Closure checklist is not provisioned in the live database.");
+      setChecking(false);
+      return;
+    }
+    const incomplete = (items || []).filter((i: any) => i.status === 'pending');
     if (incomplete.length > 0) {
       showToast("warning", `${incomplete.length} closure items still pending`);
     } else {
@@ -99,14 +124,14 @@ function HandoverPage() {
               </div>
             </div>
             <div style={styles.infoGrid}>
-              <InfoItem label="Prepared By" value={handover.prepared_by?.slice(0, 8) || '—'} />
-              <InfoItem label="Submitted" value={handover.submitted_at ? new Date(handover.submitted_at).toLocaleDateString() : '—'} />
-              <InfoItem label="Reviewed By" value={handover.reviewed_by?.slice(0, 8) || '—'} />
-              <InfoItem label="Client Acceptance" value={handover.client_acceptance ? 'Yes' : 'Pending'} />
+              <InfoItem label="Prepared By" value={(handover as any).prepared_by?.slice(0, 8) || '—'} />
+              <InfoItem label="Handover Date" value={(handover as any).handover_date ? new Date((handover as any).handover_date).toLocaleDateString() : (handover as any).submitted_at ? new Date((handover as any).submitted_at).toLocaleDateString() : '—'} />
+              <InfoItem label="Reviewed By" value={(handover as any).reviewed_by?.slice(0, 8) || '—'} />
+              <InfoItem label="Client Acceptance" value={(handover as any).client_acceptance ? 'Yes' : 'Pending'} />
             </div>
-            {handover.review_comments && (
-              <p style={{ fontSize: '13px', color: '#6B7280', marginTop: '12px' }}>Review Comments: {handover.review_comments}</p>
-            )}
+            {(handover as any).review_comments || (handover as any).notes ? (
+              <p style={{ fontSize: '13px', color: '#6B7280', marginTop: '12px' }}>Comments: {(handover as any).review_comments || (handover as any).notes}</p>
+            ) : null}
           </Card>
 
           <Card>

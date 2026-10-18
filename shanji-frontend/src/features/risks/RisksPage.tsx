@@ -9,6 +9,11 @@ import { Loading, EmptyState } from "../../components/Loading";
 import { Modal } from "../../components/Modal";
 import { useToast } from "../../hooks/useToast";
 import { getRiskLevel } from "../../types";
+import { logProjectActivity } from "../../lib/activityLog";
+
+function riskScoreOf(risk: any): number {
+  return Number(risk.risk_score ?? (Number(risk.probability || 0) * Number(risk.impact || 0)));
+}
 
 function RisksPage() {
   const { id } = useParams<{ id: string }>();
@@ -46,23 +51,12 @@ function RisksPage() {
   }
 
   async function logActivity(action: string, description: string, entityType: string, entityId?: string) {
-    if (!id || !user?.id) return;
-    await supabase.from("activity_logs").insert({
-      project_id: id,
-      actor_id: user.id,
-      action,
-      entity_type: entityType,
-      entity_id: entityId || null,
-      description,
-      metadata: {},
-    }).then(({ error }) => {
-      if (error) console.error("Activity log failed:", error);
-    });
+    await logProjectActivity(id || "", user?.id, action, description, entityType, entityId || "");
   }
 
   async function createRisk() {
     if (!id || !form.title.trim()) return;
-    const { data, error } = await supabase.from("risks").insert({
+    const rich = await supabase.from("risks").insert({
       project_id: id,
       risk_title: form.title.trim(),
       description: form.description || null,
@@ -77,14 +71,34 @@ function RisksPage() {
       status: "open",
       created_by: user?.id || null,
     }).select().single();
+
+    let data: any = rich.data;
+    let error: any = rich.error;
     if (error) {
-      showToast("error", "Failed to create risk");
+      // Live schema has no risk_title/risk_score/contingency columns.
+      const live = await supabase.from("risks").insert({
+        project_id: id,
+        description: [form.title.trim(), form.description].filter(Boolean).join("\n"),
+        category: form.category || null,
+        probability: form.probability,
+        impact: form.impact,
+        owner_id: form.owner_id || null,
+        mitigation: form.mitigation || null,
+        due_date: form.due_date || null,
+        status: "open",
+      }).select().single();
+      data = live.data;
+      error = live.error;
+    }
+
+    if (error) {
+      showToast("error", error.message || "Failed to create risk");
       return;
     }
     setShowModal(false);
     setForm({ title: "", description: "", category: "", probability: 3, impact: 3, owner_id: "", mitigation: "", contingency: "", due_date: "" });
     showToast("success", "Risk created");
-    await logActivity("create_risk", `Risk "${form.title.trim()}" created`, "risk", data.id);
+    await logActivity("create_risk", `Risk "${form.title.trim()}" created`, "risk", data?.id);
     loadRisks();
   }
 
@@ -123,18 +137,19 @@ function RisksPage() {
       ) : (
         <div style={styles.grid}>
           {risks.map((risk) => {
-            const level = getRiskLevel(risk.risk_score);
+            const score = riskScoreOf(risk);
+            const level = getRiskLevel(score);
             const levelColor = level === "Low" ? "#059669" : level === "Medium" ? "#F59E0B" : level === "High" ? "#DC2626" : "#991B1B";
             return (
               <Card key={risk.id}>
                 <div style={styles.riskHeader}>
-                  <div style={{ fontWeight: 600, fontSize: "15px" }}>{risk.risk_title}</div>
+                  <div style={{ fontWeight: 600, fontSize: "15px" }}>{(risk as any).risk_title || risk.description?.split("\n")[0] || "Risk"}</div>
                   <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
                     <span style={{ padding: "2px 8px", borderRadius: "4px", fontSize: "11px", fontWeight: 600, background: `${levelColor}15`, color: levelColor, border: `1px solid ${levelColor}40` }}>
                       {level}
                     </span>
                     <span style={{ background: "#FEF2F2", color: "#DC2626", padding: "4px 8px", borderRadius: "4px", fontWeight: 700, fontSize: "13px" }}>
-                      {risk.risk_score}
+                      {score}
                     </span>
                   </div>
                 </div>

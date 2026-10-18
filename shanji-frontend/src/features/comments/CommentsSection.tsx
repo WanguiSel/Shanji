@@ -21,21 +21,29 @@ function CommentsSection({ projectId, relatedType, relatedId }: { projectId: str
   const loadComments = async () => {
     if (!projectId) return;
     setLoading(true);
-    let query = supabase
+    const { data, error } = await supabase
       .from("comments")
       .select("*")
       .eq("project_id", projectId)
       .order("created_at", { ascending: true });
 
-    if (relatedType) query = query.eq("related_object_type", relatedType);
-    if (relatedId) query = query.eq("related_object_id", relatedId);
-
-    const { data, error } = await query;
     if (error) {
       showToast("error", "Failed to load comments");
+      setLoading(false);
       return;
     }
-    setComments((data || []) as Comment[]);
+
+    const normalized = ((data || []) as any[])
+      .map((c) => ({
+        ...c,
+        content: c.content ?? c.comment ?? "",
+        author_id: c.author_id ?? c.user_id ?? null,
+        parent_id: c.parent_id ?? null,
+        mentions: c.mentions ?? [],
+      }))
+      .filter((c) => (!relatedType || c.related_object_type === relatedType) && (!relatedId || c.related_object_id === relatedId));
+
+    setComments(normalized as Comment[]);
     setLoading(false);
   };
 
@@ -93,41 +101,58 @@ function CommentsSection({ projectId, relatedType, relatedId }: { projectId: str
     if (!user || !newComment.trim()) return;
 
     const mentionUsers = extractMentions(newComment);
-    const commentData = {
-      project_id: projectId,
-      author_id: user.id,
-      content: newComment.trim(),
-      related_object_type: relatedType || null,
-      related_object_id: relatedId || null,
-      mentions: mentionUsers,
-    };
-
-    const { data, error } = await supabase
+    const richInsert = await supabase
       .from("comments")
-      .insert(commentData)
+      .insert({
+        project_id: projectId,
+        author_id: user.id,
+        content: newComment.trim(),
+        related_object_type: relatedType || null,
+        related_object_id: relatedId || null,
+        mentions: mentionUsers,
+      })
       .select()
       .single();
+
+    let data: any = richInsert.data;
+    let error: any = richInsert.error;
+    if (error) {
+      // Live schema stores the body in `comment` and the author in `user_id`.
+      const liveInsert = await supabase
+        .from("comments")
+        .insert({
+          project_id: projectId,
+          user_id: user.id,
+          comment: newComment.trim(),
+        })
+        .select()
+        .single();
+      data = liveInsert.data;
+      error = liveInsert.error;
+    }
 
     if (!error && data) {
       setNewComment("");
       showToast("success", "Comment added");
       await loadComments();
-      
+
       for (const mentionedUser of mentionUsers) {
         await createMentionNotification(mentionedUser, data.id, projectId, newComment);
       }
+    } else {
+      showToast("error", error?.message || "Failed to add comment");
     }
   };
 
   const createMentionNotification = async (mentionedUser: string, commentId: string, projectId: string, commentContent: string) => {
     const { data: userData } = await supabase
-      .from("profiles")
+      .from("Profiles")
       .select("id")
       .eq("email", mentionedUser)
-      .single();
+      .maybeSingle();
 
     if (userData?.id && userData.id !== user?.id) {
-      await supabase.from("notifications").insert({
+      const rich = await supabase.from("notifications").insert({
         user_id: userData.id,
         type: "mention",
         title: "You were mentioned in a comment",
@@ -140,6 +165,16 @@ function CommentsSection({ projectId, relatedType, relatedId }: { projectId: str
         },
         created_at: new Date().toISOString(),
       });
+      if (rich.error) {
+        await supabase.from("notifications").insert({
+          user_id: userData.id,
+          project_id: projectId,
+          type: "mention",
+          title: "You were mentioned in a comment",
+          message: `You were mentioned in a comment: "${commentContent.substring(0, 100)}..."`,
+          created_at: new Date().toISOString(),
+        });
+      }
     }
   };
 
@@ -150,21 +185,35 @@ function CommentsSection({ projectId, relatedType, relatedId }: { projectId: str
     if (!parentComment) return;
 
     const mentionUsers = extractMentions(replyContent);
-    const replyData = {
-      project_id: projectId,
-      author_id: user.id,
-      content: replyContent.trim(),
-      related_object_type: parentComment.related_object_type || null,
-      related_object_id: parentComment.related_object_id || null,
-      parent_id: parentCommentId,
-      mentions: mentionUsers,
-    };
-
-    const { data, error } = await supabase
+    const richReply = await supabase
       .from("comments")
-      .insert(replyData)
+      .insert({
+        project_id: projectId,
+        author_id: user.id,
+        content: replyContent.trim(),
+        related_object_type: parentComment.related_object_type || null,
+        related_object_id: parentComment.related_object_id || null,
+        parent_id: parentCommentId,
+        mentions: mentionUsers,
+      })
       .select()
       .single();
+
+    let data: any = richReply.data;
+    let error: any = richReply.error;
+    if (error) {
+      const liveReply = await supabase
+        .from("comments")
+        .insert({
+          project_id: projectId,
+          user_id: user.id,
+          comment: replyContent.trim(),
+        })
+        .select()
+        .single();
+      data = liveReply.data;
+      error = liveReply.error;
+    }
 
     if (!error && data) {
       setReplyContent("");
@@ -175,23 +224,36 @@ function CommentsSection({ projectId, relatedType, relatedId }: { projectId: str
       for (const mentionedUser of mentionUsers) {
         await createMentionNotification(mentionedUser, data.id, projectId, replyContent);
       }
+    } else {
+      showToast("error", error?.message || "Failed to add reply");
     }
   };
 
   const updateComment = async (commentId: string, updates: Partial<Comment>) => {
-    const { error } = await supabase
+    const rich = await supabase
       .from("comments")
       .update(updates)
       .eq("id", commentId)
       .select()
       .single();
 
+    let error: any = rich.error;
+    if (error && (updates as any).content !== undefined) {
+      const live = await supabase
+        .from("comments")
+        .update({ comment: (updates as any).content })
+        .eq("id", commentId)
+        .select()
+        .single();
+      error = live.error;
+    }
+
     if (!error) {
       showToast("success", "Comment updated");
       await loadComments();
       return true;
     } else {
-      showToast("error", "Failed to update comment");
+      showToast("error", error.message || "Failed to update comment");
       return false;
     }
   };

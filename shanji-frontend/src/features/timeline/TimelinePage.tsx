@@ -1,30 +1,29 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
-import { supabase } from "../../lib/supabase";
 import { Card } from "../../components/Card";
 import { Loading, EmptyState } from "../../components/Loading";
-import type { WorkplanItem } from "../../types";
+import { fetchProjectTasks, type NormalizedTask } from "../../lib/taskAdapter";
 
 function TimelinePage() {
   const { id } = useParams<{ id: string }>();
-  const [tasks, setTasks] = useState<WorkplanItem[]>([]);
+  const [tasks, setTasks] = useState<NormalizedTask[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => { loadTasks(); }, []);
 
   async function loadTasks() {
     if (!id) return;
-    const { data: wpData } = await supabase.from("workplans").select("id").eq("project_id", id);
-    if (!wpData?.length) { setLoading(false); return; }
-    const { data } = await supabase.from("workplan_items").select("*").in("workplan_id", wpData.map((w) => w.id)).order("sort_order");
-    setTasks((data || []) as WorkplanItem[]);
-    setLoading(false);
+    try {
+      setTasks(await fetchProjectTasks(id));
+    } finally {
+      setLoading(false);
+    }
   }
 
   if (loading) return <Loading />;
 
   // Group tasks by status for the timeline view
-  const statusGroups: Record<string, WorkplanItem[]> = {
+  const statusGroups: Record<string, NormalizedTask[]> = {
     'Not Started': [],
     'Planned': [],
     'In Progress': [],
@@ -41,7 +40,7 @@ function TimelinePage() {
   });
 
   // Simpler mapping
-  const groups: Record<string, WorkplanItem[]> = {};
+  const groups: Record<string, NormalizedTask[]> = {};
   tasks.forEach((t) => {
     const shortStatus = t.status.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
     if (!groups[shortStatus]) groups[shortStatus] = [];

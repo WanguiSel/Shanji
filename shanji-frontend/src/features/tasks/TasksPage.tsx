@@ -7,6 +7,7 @@ import { Loading, EmptyState } from "../../components/Loading";
 import { StatusBadge } from "../../components/StatusBadge";
 import { useToast } from "../../hooks/useToast";
 import { getTaskTransitionMatrix } from "../../lib/utils";
+import { fetchProjectTasks, createProjectTask, updateProjectTask, deleteProjectTask, logTaskActivity, type NormalizedTask } from "../../lib/taskAdapter";
 
 function TasksPage() {
   const { id } = useParams<{ id: string }>();
@@ -29,20 +30,8 @@ function TasksPage() {
     if (!id) return;
     setError(null);
     try {
-      const { data: wpData } = await supabase.from("workplans").select("id").eq("project_id", id);
-      if (!wpData?.length) {
-        setTasks([]);
-        setLoading(false);
-        return;
-      }
-      const wpIds = wpData.map((w) => w.id);
-      const { data, error: qError } = await supabase
-        .from("workplan_items")
-        .select("*")
-        .in("workplan_id", wpIds)
-        .order("sort_order");
-      if (qError) throw qError;
-      setTasks((data || []) as any[]);
+      const data = await fetchProjectTasks(id);
+      setTasks(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load tasks");
     } finally {
@@ -51,46 +40,21 @@ function TasksPage() {
   };
 
   const logActivity = async (action: string, description: string) => {
-    if (!id || !user?.id) return;
-    await supabase.from("activity_logs").insert({
-      project_id: id,
-      actor_id: user.id,
-      action,
-      entity_type: "workplan_item",
-      entity_id: "",
-      description,
-      metadata: {},
-      created_at: new Date().toISOString(),
-    }).then(({ error }) => { if (error) console.error("Activity log failed:", error); });
+    await logTaskActivity(id || "", user?.id, action, description);
   };
 
   const createTask = async () => {
     if (!id || !newTaskTitle.trim()) return;
-    const { data: wpData } = await supabase
-      .from("workplans")
-      .select("id")
-      .eq("project_id", id)
-      .single();
-    if (!wpData?.id) return;
-
-    const taskData = {
-      workplan_id: wpData.id,
-      task_title: newTaskTitle.trim(),
-      description: null,
-      responsible_role: newTaskResponsibleRole || null,
-      responsible_user_id: newTaskResponsibleUser || null,
-      priority: newTaskPriority,
-      start_date: newTaskStartDate || null,
-      end_date: newTaskDueDate || null,
-      status: "not_started",
-      progress: 0,
-      sort_order: tasks.length + 1,
-      created_by: user?.id,
-    };
-
-    const { error } = await supabase.from("workplan_items").insert(taskData);
-
-    if (!error) {
+    try {
+      await createProjectTask(id, {
+        task_title: newTaskTitle.trim(),
+        priority: newTaskPriority,
+        start_date: newTaskStartDate || null,
+        end_date: newTaskDueDate || null,
+        responsible_user_id: newTaskResponsibleUser || null,
+        responsible_role: newTaskResponsibleRole || null,
+        created_by: user?.id,
+      });
       setShowCreateModal(false);
       setNewTaskTitle("");
       setNewTaskPriority("medium");
@@ -101,44 +65,42 @@ function TasksPage() {
       showToast("success", "Task created");
       await logActivity("task_created", `Task "${newTaskTitle.trim()}" created`);
       loadTasks();
-    } else {
-      showToast("error", "Failed to create task");
+    } catch (err) {
+      showToast("error", err instanceof Error ? err.message : "Failed to create task");
     }
   };
 
   const updateTask = async (taskId: string, updates: Partial<any>) => {
-    const { data: taskData, error } = await supabase
-      .from("workplan_items")
-      .update(updates)
-      .eq("id", taskId)
-      .select()
-      .single();
-
-    if (!error) {
+    const task = tasks.find((t) => t.id === taskId) as NormalizedTask | undefined;
+    if (!task) {
+      showToast("error", "Task not found");
+      return false;
+    }
+    try {
+      await updateProjectTask(task, updates);
       showToast("success", "Task updated");
-      await logActivity("task_updated", `Task "${taskData?.task_title || taskId}" updated`);
+      await logActivity("task_updated", `Task "${updates.task_title || task.task_title || taskId}" updated`);
       loadTasks();
       return true;
-    } else {
+    } catch {
       showToast("error", "Failed to update task");
       return false;
     }
   };
 
   const deleteTask = async (taskId: string) => {
-    const { data: taskData, error } = await supabase
-      .from("workplan_items")
-      .delete()
-      .eq("id", taskId)
-      .select()
-      .single();
-
-    if (!error) {
+    const task = tasks.find((t) => t.id === taskId) as NormalizedTask | undefined;
+    if (!task) {
+      showToast("error", "Task not found");
+      return false;
+    }
+    try {
+      await deleteProjectTask(task);
       showToast("success", "Task deleted");
-      await logActivity("task_deleted", `Task "${taskData?.task_title || taskId}" deleted`);
+      await logActivity("task_deleted", `Task "${task.task_title || taskId}" deleted`);
       loadTasks();
       return true;
-    } else {
+    } catch {
       showToast("error", "Failed to delete task");
       return false;
     }
@@ -148,6 +110,7 @@ function TasksPage() {
     if (!user) return false;
     if (task.created_by === user.id) return true;
     if (task.responsible_user_id === user.id) return true;
+    if (["project_manager", "site_supervisor", "admin"].includes(user.role)) return true;
     const projectRoles = user.project_roles || {};
     if (!id) return false;
     if (projectRoles[id] && (projectRoles[id] === "project_manager" || projectRoles[id] === "site_supervisor")) return true;

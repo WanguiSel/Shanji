@@ -38,11 +38,23 @@ function Dashboard() {
       const [pR, rR, tR, aR, eR, prR, acR, expR, iR, inspR, caR, nmR, payR, fR, faR, budR] = await Promise.all([
         supabase.from("projects").select("*").order("created_at", { ascending: false }),
         supabase.from("risks").select("*").order("created_at", { ascending: false }),
-        supabase.from("workplan_items").select("*").order("created_at", { ascending: false }),
-        supabase.from("approvals").select("*").order("requested_at", { ascending: false }),
+        (async () => {
+          const taskResult = await supabase.from("tasks").select("*").order("created_at", { ascending: false });
+          if (!taskResult.error) {
+            return {
+              data: (taskResult.data || []).map((t: any) => ({
+                ...t,
+                task_title: t.task_title || t.description || `Task ${String(t.id).slice(0, 8)}`,
+              })),
+              error: null,
+            };
+          }
+          return supabase.from("workplan_items").select("*").order("created_at", { ascending: false });
+        })(),
+        supabase.from("approvals").select("*").order("created_at", { ascending: false }),
         supabase.from("evidence_records").select("*").order("created_at", { ascending: false }),
         supabase.from("procurement_requests").select("*").order("created_at", { ascending: false }),
-        supabase.from("activity_logs").select("id,project_id,actor_id,action,entity_type,entity_id,description,metadata,created_at").order("created_at", { ascending: false }).limit(20),
+        supabase.from("activity_logs").select("*").order("created_at", { ascending: false }).limit(20),
         supabase.from("expenses").select("*").order("created_at", { ascending: false }),
         supabase.from("incidents").select("*").order("date_occurred", { ascending: false }),
         supabase.from("inspections").select("*").order("inspection_date", { ascending: false }),
@@ -76,10 +88,17 @@ function Dashboard() {
   if (loading) return <Loading message="Loading Project Operations Command Centre..." />;
 
   // --- GLOBAL METRICS ---
+  const riskScoreOf = (r: any) => Number(r.risk_score ?? (Number(r.probability || 0) * Number(r.impact || 0)));
+  const projectHealthOf = (p: any) => {
+    if (p?.health) return p.health;
+    const score = Number(p?.health_score ?? NaN);
+    if (Number.isNaN(score)) return "green";
+    return score >= 70 ? "green" : score >= 40 ? "amber" : "red";
+  };
   const activeProjects = projects.filter((p: any) => p.status === "active");
   const openRisks = risks.filter((r: any) => r.status === "open");
-  const criticalRisks = openRisks.filter((r: any) => r.risk_score >= 17);
-  const highRisks = openRisks.filter((r: any) => r.risk_score >= 10 && r.risk_score < 17);
+  const criticalRisks = openRisks.filter((r: any) => riskScoreOf(r) >= 17);
+  const highRisks = openRisks.filter((r: any) => riskScoreOf(r) >= 10 && riskScoreOf(r) < 17);
   const pendingApprovals = approvals.filter((a: any) => a.status === "pending");
   const overdueTasks = tasks.filter((t: any) => t.end_date && new Date(t.end_date) < new Date() && t.status !== "completed" && t.status !== "verified" && t.status !== "approved");
   const dueSoonTasks = tasks.filter((t: any) => {
@@ -98,7 +117,7 @@ function Dashboard() {
   const getProjectOverdue = (pid: string) => tasks.filter((t: any) => t.project_id === pid && t.end_date && new Date(t.end_date) < new Date() && t.status !== "completed" && t.status !== "verified" && t.status !== "approved");
   const getProjectPendingApprovals = (pid: string) => approvals.filter((a: any) => a.project_id === pid && a.status === "pending");
   const getProjectProgress = (pid: string) => { const projs = projects.filter((p: any) => p.id === pid); return projs.length > 0 ? (projs[0].progress || 0) : 0; };
-  const getProjectHealth = (pid: string) => { const projs = projects.filter((p: any) => p.id === pid); return projs.length > 0 ? projs[0].health : "green"; };
+  const getProjectHealth = (pid: string) => { const projs = projects.filter((p: any) => p.id === pid); return projs.length > 0 ? projectHealthOf(projs[0]) : "green"; };
 
   const getLatestActivity = (pid: string) => {
     const logs = activityLogs.filter((l: any) => l.project_id === pid);
@@ -114,7 +133,7 @@ function Dashboard() {
     .slice(0, 8);
 
   // --- FINANCE METRICS ---
-  const totalBudget = budgets.reduce((s: number, b: any) => s + (b.amount || 0), 0);
+  const totalBudget = budgets.reduce((s: number, b: any) => s + Number(b.amount ?? b.allocated_amount ?? 0), 0);
   const totalSpent = expenses.reduce((s: number, e: any) => s + (e.amount || 0), 0);
   const totalPaid = payments.reduce((s: number, p: any) => s + (p.amount || 0), 0);
   const totalFunds = funds.reduce((s: number, f: any) => s + (f.amount || 0), 0);
@@ -140,7 +159,7 @@ function Dashboard() {
     })),
     ...(totalBudget > 0 && budgetUsePct > 90 ? [{
       type: "finance", label: "Budget Near Limit", reason: `${budgetUsePct}% used`, date: new Date().toISOString(),
-      navigate: `/projects/${projects[0]?.project_id || ""}/finance`,
+      navigate: `/projects/${projects[0]?.id || ""}/finance`,
     }] : []),
   ];
 

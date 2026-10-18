@@ -8,6 +8,7 @@ import { Loading, EmptyState } from "../../components/Loading";
 import { StatusBadge } from "../../components/StatusBadge";
 import { useToast } from "../../hooks/useToast";
 import { getTaskTransitionMatrix } from "../../lib/utils";
+import { logProjectActivity } from "../../lib/activityLog";
 
 function ApprovalsPage() {
   const { id } = useParams<{ id: string }>();
@@ -32,21 +33,23 @@ function ApprovalsPage() {
         .from("approvals")
         .select("*")
         .eq("project_id", id)
-        .order("requested_at", { ascending: false });
+        .order("created_at", { ascending: false });
       if (fetchError) throw fetchError;
 
       if (data?.length) {
-        const itemIds = data.map((a) => a.item_id).filter(Boolean);
-        const { data: tasks } = await supabase
-          .from("workplan_items")
-          .select("id, status")
-          .in("id", itemIds);
+        const itemIds = data.map((a: any) => a.item_id).filter(Boolean);
+        if (itemIds.length) {
+          const { data: tasks } = await supabase
+            .from("workplan_items")
+            .select("id, status")
+            .in("id", itemIds);
 
-        const statusMap: Record<string, string> = {};
-        tasks?.forEach((t) => {
-          statusMap[t.id] = t.status;
-        });
-        setTaskStatuses(statusMap);
+          const statusMap: Record<string, string> = {};
+          tasks?.forEach((t: any) => {
+            statusMap[t.id] = t.status;
+          });
+          setTaskStatuses(statusMap);
+        }
       }
 
       setApprovals(data || []);
@@ -58,50 +61,47 @@ function ApprovalsPage() {
   };
 
   const createApproval = async () => {
-    if (!id || !newApprovalTitle.trim()) return;
+    if (!id || !newApprovalTitle.trim() || !user?.id) return;
 
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("id")
-      .eq("id", user?.id)
-      .single();
-
-    if (!profile?.id) {
-      showToast("error", "User profile not found");
-      return;
-    }
-
-    const approvalData = {
+    const rich = await supabase.from("approvals").insert({
       project_id: id,
       item_type: "workplan_item",
       item_id: null,
-      requester_id: profile.id,
+      requester_id: user.id,
       approver_id: null,
       status: "pending",
-      comments: null,
-      previous_state: null,
-      new_state: null,
+      comments: newApprovalTitle.trim(),
       requested_at: new Date().toISOString(),
-      decided_at: null,
       created_at: new Date().toISOString(),
-    };
+    });
 
-    const { error } = await supabase.from("approvals").insert(approvalData);
+    let insertError = rich.error;
+    if (insertError) {
+      // Live schema: approvals stores the requester in requested_by.
+      const fallback = await supabase.from("approvals").insert({
+        project_id: id,
+        status: "pending",
+        requested_by: user.id,
+        created_at: new Date().toISOString(),
+      });
+      insertError = fallback.error;
+    }
 
-    if (!error) {
+    if (!insertError) {
+      await logProjectActivity(id, user?.id, "approval_requested", newApprovalTitle.trim(), "approval", "");
       showToast("success", "Approval request created");
       setShowCreateModal(false);
       setNewApprovalTitle("");
       loadApprovals();
     } else {
-      showToast("error", "Failed to create approval");
+      showToast("error", insertError.message || "Failed to create approval");
     }
   };
 
   const submitDecision = async () => {
     if (!selectedApproval || !decision) return;
 
-    const { error: updateError } = await supabase
+    const richUpdate = await supabase
       .from("approvals")
       .update({
         status: decision,
@@ -111,17 +111,28 @@ function ApprovalsPage() {
       })
       .eq("id", selectedApproval.id);
 
+    let updateError = richUpdate.error;
+    if (updateError) {
+      const liveUpdate = await supabase
+        .from("approvals")
+        .update({
+          status: decision,
+          approved_by: user?.id,
+          approved_at: new Date().toISOString(),
+        })
+        .eq("id", selectedApproval.id);
+      updateError = liveUpdate.error;
+    }
+
     if (!updateError) {
-      await supabase.from("activity_logs").insert({
-        project_id: id,
-        actor_id: user?.id,
-        action: decision === "approved" ? "approval_approved" : decision === "rejected" ? "approval_rejected" : "approval_returned",
-        entity_type: "approval",
-        entity_id: selectedApproval.id,
-        description: `Approval ${decision} for ${selectedApproval.item_type} ${selectedApproval.item_id}: ${comment}`,
-        metadata: {},
-        created_at: new Date().toISOString(),
-      }).then(({ error }) => { if (error) console.error("Activity log failed:", error); });
+      await logProjectActivity(
+        id || "",
+        user?.id,
+        decision === "approved" ? "approval_approved" : decision === "rejected" ? "approval_rejected" : "approval_returned",
+        `Approval ${decision}${comment ? `: ${comment}` : ""}`,
+        "approval",
+        selectedApproval.id,
+      );
 
       showToast("success", "Decision submitted");
       setSelectedApproval(null);
@@ -129,14 +140,14 @@ function ApprovalsPage() {
       setComment("");
       loadApprovals();
 
-      if (decision === "approved") {
+      if (decision === "approved" && selectedApproval.item_id) {
         await supabase
           .from("workplan_items")
           .update({ status: "approved" })
           .eq("id", selectedApproval.item_id);
       }
     } else {
-      showToast("error", "Failed to submit decision");
+      showToast("error", updateError.message || "Failed to submit decision");
     }
   };
 
@@ -164,6 +175,7 @@ function ApprovalsPage() {
           <h1>Approvals</h1>
           <p style={{ color: "#6B7280", fontSize: "14px", marginTop: "4px" }}>Pending and completed approvals</p>
         </div>
+        <button className="btn btn-primary" onClick={() => setShowCreateModal(true)}>+ New Approval Request</button>
       </div>
 
       {approvals.length === 0 ? (
@@ -176,9 +188,9 @@ function ApprovalsPage() {
             <Card key={approval.id}>
               <div style={styles.cardHeader}>
                 <div>
-                  <div style={{ fontWeight: 600, marginBottom: "4px" }}>{approval.item_type} #{approval.item_id?.slice(0, 8)}</div>
+                  <div style={{ fontWeight: 600, marginBottom: "4px" }}>{approval.item_type || approval.type || "Approval"} {approval.item_id ? `#${String(approval.item_id).slice(0, 8)}` : ""}</div>
                   <div style={{ fontSize: "13px", color: "#6B7280" }}>
-                    Requested: {new Date(approval.requested_at).toLocaleString()}
+                    Requested: {approval.requested_at || approval.created_at ? new Date(approval.requested_at || approval.created_at).toLocaleString() : "—"}
                   </div>
                   {approval.status === "pending" && taskStatuses[approval.item_id || ""] && (
                     <div style={{ fontSize: "12px", color: "#F59E0B", marginTop: "4px" }}>
@@ -192,21 +204,21 @@ function ApprovalsPage() {
                 <button
                   className="btn btn-sm btn-primary"
                   onClick={() => { setSelectedApproval(approval); setDecision("approved"); }}
-                  disabled={approval.status !== "pending" || !canApprove(approval, profile?.role as string)}
+                  disabled={approval.status !== "pending" || !canApprove(approval, user?.role)}
                 >
                   Approve
                 </button>
                 <button
                   className="btn btn-sm btn-secondary"
                   onClick={() => { setSelectedApproval(approval); setDecision("rejected"); }}
-                  disabled={approval.status !== "pending" || !canReject(approval, profile?.role as string)}
+                  disabled={approval.status !== "pending" || !canReject(approval, user?.role)}
                 >
                   Reject
                 </button>
                 <button
                   className="btn btn-sm btn-secondary"
                   onClick={() => { setSelectedApproval(approval); setDecision("returned_for_correction"); }}
-                  disabled={approval.status !== "pending" || !canReturn(approval, profile?.role as string)}
+                  disabled={approval.status !== "pending" || !canReturn(approval, user?.role)}
                 >
                   Return
                 </button>
@@ -216,7 +228,22 @@ function ApprovalsPage() {
         </div>
       )}
 
-      <Modal isOpen={!!selectedApproval} onClose={() => setSelectedApproval(null)} title={`Decision — ${selectedApproval?.item_type || ""}`}>
+      <Modal isOpen={showCreateModal} onClose={() => setShowCreateModal(false)} title="New Approval Request">
+        <label style={styles.label}>Approval subject</label>
+        <input
+          className="input"
+          value={newApprovalTitle}
+          onChange={(e) => setNewApprovalTitle(e.target.value)}
+          placeholder="What needs approval?"
+          style={{ marginBottom: "16px" }}
+        />
+        <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
+          <button className="btn btn-secondary" onClick={() => setShowCreateModal(false)}>Cancel</button>
+          <button className="btn btn-primary" onClick={createApproval}>Create Request</button>
+        </div>
+      </Modal>
+
+      <Modal isOpen={!!selectedApproval} onClose={() => setSelectedApproval(null)} title={`Decision — ${selectedApproval?.item_type || "Approval"}`}>
         {selectedApproval && (
           <div>
             <label style={styles.label}>Comments</label>

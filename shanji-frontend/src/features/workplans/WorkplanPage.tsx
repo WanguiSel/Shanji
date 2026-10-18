@@ -6,6 +6,8 @@ import { Card } from "../../components/Card";
 import { Loading, EmptyState } from "../../components/Loading";
 import { StatusBadge } from "../../components/StatusBadge";
 import { useToast } from "../../hooks/useToast";
+import { fetchProjectTasks, type NormalizedTask } from "../../lib/taskAdapter";
+import { logProjectActivity } from "../../lib/activityLog";
 
 function WorkplanPage() {
   const { id } = useParams<{ id: string }>();
@@ -13,8 +15,9 @@ function WorkplanPage() {
   const { user } = useAuth();
   const { toasts, showToast } = useToast();
   const [workplan, setWorkplan] = useState<any>(null);
+  const [projectName, setProjectName] = useState("");
   const [history, setHistory] = useState<any[]>([]);
-  const [tasks, setTasks] = useState<any[]>([]);
+  const [tasks, setTasks] = useState<NormalizedTask[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showCreateVersionModal, setShowCreateVersionModal] = useState(false);
@@ -37,11 +40,13 @@ function WorkplanPage() {
   };
 
   const isProjectManager = () => {
+    if (user?.role === 'project_manager' || user?.role === 'admin') return true;
     if (!user?.project_roles || !id) return false;
     return user.project_roles[id] === 'project_manager';
   };
 
   const isAssistant = () => {
+    if (user?.role === 'project_assistant') return true;
     if (!user?.project_roles || !id) return false;
     return user.project_roles[id] === 'project_assistant';
   };
@@ -83,17 +88,29 @@ function WorkplanPage() {
     try {
       const { data: wpData, error: wpError } = await supabase
         .from("workplans")
-        .select("*, projects(project_name)")
+        .select("*")
         .eq("project_id", id)
         .order("created_at", { ascending: false })
         .limit(1)
-        .single();
-      if (wpError) throw wpError;
+        .maybeSingle();
+
+      if (wpError && wpError.code !== "PGRST116") throw wpError;
+
+      const { data: project } = await supabase
+        .from("projects")
+        .select("project_name")
+        .eq("id", id)
+        .maybeSingle();
+      setProjectName(project?.project_name || "");
+
       if (wpData) {
         setWorkplan(wpData as any);
         loadHistory(wpData.id);
-        loadTasks(wpData.id);
+      } else {
+        setWorkplan(null);
+        setHistory([]);
       }
+      loadTasks();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load workplan");
     } finally {
@@ -107,21 +124,17 @@ function WorkplanPage() {
         .from("workplan_history")
         .select("*")
         .eq("project_id", id)
-        .order("version_sequence", { ascending: false });
+        .order("version", { ascending: false });
       setHistory(data || []);
     } catch (err) {
       console.error("Failed to load history:", err);
     }
   };
 
-  const loadTasks = async (workplanId: string) => {
+  const loadTasks = async () => {
+    if (!id) return;
     try {
-      const { data } = await supabase
-        .from("workplan_items")
-        .select("*")
-        .eq("workplan_id", workplanId)
-        .order("sort_order");
-      setTasks((data || []) as any[]);
+      setTasks(await fetchProjectTasks(id));
     } catch (err) {
       console.error("Failed to load tasks:", err);
     }
@@ -148,14 +161,31 @@ function WorkplanPage() {
       created_by: user?.id,
     };
 
-    const { data: newWorkplan, error } = await supabase
+    let { data: newWorkplan, error } = await supabase
       .from("workplans")
       .insert(workplanData)
       .select()
       .single();
 
+    // Live schema: workplans has `name` and no description column.
+    if (error) {
+      const fallback = await supabase
+        .from("workplans")
+        .insert({
+          project_id: id,
+          version,
+          name: newVersionTitle.trim() || `Version ${version}`,
+          status: "draft",
+          created_by: user?.id,
+        })
+        .select()
+        .single();
+      newWorkplan = fallback.data;
+      error = fallback.error;
+    }
+
     if (!error && newWorkplan) {
-      await supabase
+      const richHistory = await supabase
         .from("workplan_history")
         .insert({
           project_id: id,
@@ -168,6 +198,15 @@ function WorkplanPage() {
           created_by: user?.id,
           change_summary: 'Created new workplan version',
         });
+      if (richHistory.error) {
+        await supabase.from("workplan_history").insert({
+          project_id: id,
+          workplan_id: newWorkplan.id,
+          version,
+          status: "draft",
+        });
+      }
+      await logProjectActivity(id, user?.id, "workplan_version_created", `Workplan version ${version} created`, "workplan", newWorkplan.id);
 
       showToast("success", `New workplan version ${version} created`);
       setShowCreateVersionModal(false);
@@ -175,7 +214,7 @@ function WorkplanPage() {
       setNewVersionDescription("");
       loadWorkplan();
     } else {
-      showToast("error", "Failed to create new version");
+      showToast("error", error?.message || "Failed to create new version");
     }
   };
 
@@ -194,18 +233,14 @@ function WorkplanPage() {
       .eq("id", workplan.id);
 
     if (!error) {
-      await supabase
-        .from("activity_logs")
-        .insert({
-          project_id: id,
-          actor_id: user?.id,
-          action: "workplan_submitted",
-          entity_type: "workplan",
-          entity_id: workplan.id,
-          description: `Workplan ${workplan.version} submitted for PM review`,
-          metadata: {},
-          created_at: new Date().toISOString(),
-        });
+      await logProjectActivity(
+        id || "",
+        user?.id,
+        "workplan_submitted",
+        `Workplan ${workplan.version} submitted for PM review`,
+        "workplan",
+        workplan.id,
+      );
 
       showToast("success", "Workplan submitted for review");
       setShowSubmitModal(false);
@@ -244,18 +279,14 @@ function WorkplanPage() {
         .eq("status", 'approved')
         .neq("workplan_id", workplan.id);
 
-      await supabase
-        .from("activity_logs")
-        .insert({
-          project_id: id,
-          actor_id: user?.id,
-          action: "workplan_approved",
-          entity_type: "workplan",
-          entity_id: workplan.id,
-          description: `Workplan ${workplan.version} approved by PM. Reason: ${approveReason}`,
-          metadata: {},
-          created_at: new Date().toISOString(),
-        });
+      await logProjectActivity(
+        id || "",
+        user?.id,
+        "workplan_approved",
+        `Workplan ${workplan.version} approved by PM. Reason: ${approveReason}`,
+        "workplan",
+        workplan.id,
+      );
 
       showToast("success", "Workplan approved");
       setShowApproveModal(false);
@@ -281,18 +312,14 @@ function WorkplanPage() {
       .eq("id", workplan.id);
 
     if (!error) {
-      await supabase
-        .from("activity_logs")
-        .insert({
-          project_id: id,
-          actor_id: user?.id,
-          action: "workplan_rejected",
-          entity_type: "workplan",
-          entity_id: workplan.id,
-          description: `Workplan ${workplan.version} rejected by PM. Reason: ${rejectReason}`,
-          metadata: {},
-          created_at: new Date().toISOString(),
-        });
+      await logProjectActivity(
+        id || "",
+        user?.id,
+        "workplan_rejected",
+        `Workplan ${workplan.version} rejected by PM. Reason: ${rejectReason}`,
+        "workplan",
+        workplan.id,
+      );
 
       showToast("success", "Workplan rejected");
       setShowRejectModal(false);
@@ -301,6 +328,43 @@ function WorkplanPage() {
     } else {
       showToast("error", "Failed to reject workplan");
     }
+  };
+
+  const saveDraftEdits = async () => {
+    if (!selectedHistory || !workplan) return;
+    const richUpdate = await supabase
+      .from("workplan_history")
+      .update({
+        title: editTitle.trim(),
+        description: editDescription.trim() || null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", selectedHistory.id);
+
+    if (richUpdate.error && selectedHistory.workplan_id === workplan.id) {
+      // Live schema has no history title column; the editable name lives on workplans.
+      const liveUpdate = await supabase
+        .from("workplans")
+        .update({ name: editTitle.trim() })
+        .eq("id", workplan.id);
+      if (liveUpdate.error) {
+        showToast("error", liveUpdate.error.message);
+        return;
+      }
+    }
+
+    await logProjectActivity(
+      id || "",
+      user?.id,
+      "workplan_edited",
+      `Workplan ${workplan.version} draft updated`,
+      "workplan",
+      workplan.id,
+    );
+    showToast("success", "Workplan updated");
+    setShowEditDraftModal(false);
+    setSelectedHistory(null);
+    loadWorkplan();
   };
 
   useEffect(() => {
@@ -339,8 +403,11 @@ function WorkplanPage() {
       {workplan ? (
         <div>
           <div style={{ marginBottom: "32px" }}>
-            <h1>{workplan?.projects?.project_name || 'Workplan'}</h1>
-            <p style={{ color: "#6B7280", fontSize: "14px", marginTop: "4px" }}>{workplan?.title}</p>
+            <div style={{ display: "flex", justifyContent: "space-between", gap: "16px", flexWrap: "wrap" }}>
+              <h1>{projectName || 'Workplan'}</h1>
+              <button className="btn btn-secondary" onClick={() => setShowCreateVersionModal(true)}>Create New Version</button>
+            </div>
+            <p style={{ color: "#6B7280", fontSize: "14px", marginTop: "4px" }}>{workplan?.name || workplan?.title}</p>
             <div style={{ marginTop: "16px", display: "flex", gap: "16px", flexWrap: "wrap" }}>
               <div><span style={{ fontSize: "13px", color: "#6B7280" }}>Version:</span> <span style={{ fontWeight: 600 }}>{workplan?.version}</span></div>
               <div><span style={{ fontSize: "13px", color: "#6B7280" }}>Status:</span> <span style={{ fontWeight: 600 }}>{workplan?.status}</span></div>
@@ -386,11 +453,11 @@ function WorkplanPage() {
                   <Card key={hist.id}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                       <div style={{ flex: 1 }}>
-                        <h3 style={{ fontSize: "16px", fontWeight: 600, marginBottom: "4px" }}>{hist?.version} - {hist?.title}</h3>
+                        <h3 style={{ fontSize: "16px", fontWeight: 600, marginBottom: "4px" }}>{hist?.version} - {hist?.name || hist?.title || ''}</h3>
                         <div style={{ fontSize: "13px", color: "#6B7280", marginTop: "4px" }}>
                           <span>Status: {hist?.status}</span>
                           <span style={{ margin: "0 8px" }}>•</span>
-                          <span>Created: {new Date(hist?.created_at).toLocaleString()}</span>
+                          <span>Created: {hist?.created_at ? new Date(hist.created_at).toLocaleString() : '—'}</span>
                           {hist?.approved_at && (
                              <>
                               <span style={{ margin: "0 8px" }}>•</span>
@@ -406,7 +473,7 @@ function WorkplanPage() {
                         {canEditWorkplan(workplan) && !hist?.is_archived && (
                           <button
                             className="btn btn-sm btn-secondary"
-                            onClick={() => { setSelectedHistory(hist); setShowEditDraftModal(true); setEditTitle(hist?.title); setEditDescription(hist?.description || ""); }}
+                            onClick={() => { setSelectedHistory(hist); setShowEditDraftModal(true); setEditTitle(hist?.name || hist?.title || ""); setEditDescription(hist?.description || ""); }}
                           >
                             Edit
                 </button>
@@ -422,11 +489,6 @@ function WorkplanPage() {
           <div style={{ marginBottom: "24px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <h2 style={{ fontSize: "18px", fontWeight: 600 }}>Tasks</h2>
             <button className="btn btn-primary" onClick={() => navigate(`/projects/${workplan?.project_id}/tasks`)}>+ New Task</button>
-          </div>
-
-          <div style={{ marginBottom: "24px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <h2 style={{ fontSize: "18px", fontWeight: 600 }}>Tasks</h2>
-            <button className="btn btn-primary" onClick={() => navigate(`/projects/${workplan?.project_id}/tasks/new`)}>+ New Task</button>
           </div>
 
 
@@ -472,6 +534,9 @@ function WorkplanPage() {
       ) : (
         <Card>
           <EmptyState title="No workplan found" message="Workplan doesn't exist for this project" />
+          <div style={{ textAlign: "center", paddingBottom: "16px" }}>
+            <button className="btn btn-primary" onClick={() => setShowCreateVersionModal(true)}>Create Workplan</button>
+          </div>
         </Card>
       )}
 
@@ -597,7 +662,7 @@ function WorkplanPage() {
             </div>
             <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
               <button className="btn btn-secondary" onClick={() => setShowEditDraftModal(false)}>Cancel</button>
-              <button className="btn btn-primary" onClick={() => { /* TODO: implement edit functionality */ }}>Save Changes</button>
+              <button className="btn btn-primary" onClick={saveDraftEdits}>Save Changes</button>
             </div>
           </div>
         </div>
