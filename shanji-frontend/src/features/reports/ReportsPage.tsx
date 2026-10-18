@@ -3,11 +3,12 @@ import { useParams } from "react-router-dom";
 import { supabase } from "../../lib/supabase";
 import { Card, StatCard } from "../../components/Card";
 import { Loading, EmptyState } from "../../components/Loading";
+import { fetchProjectTasks, type NormalizedTask } from "../../lib/taskAdapter";
 
 function ReportsPage() {
   const { id } = useParams<{ id: string }>();
   const [project, setProject] = useState<any>(null);
-  const [tasks, setTasks] = useState<any[]>([]);
+  const [tasks, setTasks] = useState<NormalizedTask[]>([]);
   const [risks, setRisks] = useState<any[]>([]);
   const [expenses, setExpenses] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -19,10 +20,10 @@ function ReportsPage() {
     const { data: pData } = await supabase.from("projects").select("*").eq("id", id).single();
     setProject(pData);
 
-    const { data: wpData } = await supabase.from("workplans").select("id").eq("project_id", id);
-    if (wpData?.length) {
-      const { data: tData } = await supabase.from("workplan_items").select("*").in("workplan_id", wpData.map((w) => w.id));
-      setTasks((tData || []) as any[]);
+    try {
+      setTasks(await fetchProjectTasks(id));
+    } catch {
+      setTasks([]);
     }
 
     const { data: rData } = await supabase.from("risks").select("*").eq("project_id", id);
@@ -39,7 +40,10 @@ function ReportsPage() {
   const completed = tasks.filter((t) => t.status === 'completed' || t.status === 'approved').length;
   const total = tasks.length;
   const openRisks = risks.filter((r) => r.status === 'open').length;
-  const totalExpenses = expenses.reduce((s, e) => s + (e.amount || 0), 0);
+  const totalExpenses = expenses.reduce((s, e) => s + (Number(e.amount) || 0), 0);
+  const health = project.health || (Number(project.health_score) >= 70 ? "green" : Number(project.health_score) >= 40 ? "amber" : project.health_score != null ? "red" : "green");
+  const budget = Number(project.budget ?? project.budget_amount ?? 0);
+  const totalRiskScore = risks.reduce((s, r) => s + Number(r.risk_score ?? (Number(r.probability || 0) * Number(r.impact || 0))), 0);
 
   return (
     <div>
@@ -54,9 +58,10 @@ function ReportsPage() {
         <h2 style={{ fontSize: '18px', marginBottom: '16px' }}>Project Status Report — {project.project_name}</h2>
         <div style={styles.infoGrid}>
           <InfoItem label="Progress" value={`${project.progress || 0}%`} />
-          <InfoItem label="Health" value={project.health || 'green'} />
+          <InfoItem label="Health" value={health} />
           <InfoItem label="Tasks Completed" value={`${completed}/${total}`} />
           <InfoItem label="Open Risks" value={String(openRisks)} />
+          <InfoItem label="Risk Score" value={String(totalRiskScore)} />
           <InfoItem label="Total Expenses" value={`KES ${totalExpenses.toLocaleString()}`} />
           <InfoItem label="Start Date" value={project.start_date || '—'} />
           <InfoItem label="End Date" value={project.end_date || '—'} />
@@ -66,7 +71,7 @@ function ReportsPage() {
 
       <div style={styles.statsRow}>
         <StatCard title="Task Completion" value={total > 0 ? `${Math.round((completed / total) * 100)}%` : '0%'} />
-        <StatCard title="Budget Used" value={project.budget ? `${Math.round((totalExpenses / project.budget) * 100)}%` : '—'} />
+        <StatCard title="Budget Used" value={budget > 0 ? `${Math.round((totalExpenses / budget) * 100)}%` : '—'} />
         <StatCard title="Open Issues" value={String(risks.filter((r) => r.status === 'materialized').length)} color="#F59E0B" />
       </div>
 

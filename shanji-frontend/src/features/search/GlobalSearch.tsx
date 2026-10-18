@@ -34,88 +34,29 @@ function GlobalSearch() {
     setError(null);
 
     try {
-      // Build search query with proper permission checks
-      const searchPromises = [];
+      const [projectResult, taskResult, peopleResult, approvalResult] = await Promise.all([
+        supabase.from("projects").select("*").limit(100),
+        supabase.from("tasks").select("*").limit(200),
+        supabase.from("Profiles").select("*").limit(100),
+        supabase.from("approvals").select("*").limit(100),
+      ]);
 
-      // Search projects (user has access to these through organization roles)
-      searchPromises.push(
-        supabase
-          .from("projects")
-          .select("id, project_name, project_code, client_name, status, progress, organization_id")
-          .or(`organization_id.in.(${user.organization_ids || []}),project_id.in.(select id from project_members where user_id = ${user.id})`)
-          .ilike("project_name", `%${term}%`)
-          .limit(10)
-      );
-
-      // Search tasks (tasks are linked to projects user has access to)
-      searchPromises.push(
-        supabase
-          .from("workplan_items")
-          .select(
-             `id, task_title, status, priority, end_date, project_id, workplan:workplans(project_name, project_code)`
-           )
-           .in(
-             "project_id",
-             (
-               await supabase
-                 .from("projects")
-                 .select("id")
-                 .or(`organization_id.in.(${user.organization_ids || []}),id.in.(select project_id from project_members where user_id = ${user.id})`)
-             ).data || []
-           )
-          .ilike("task_title", `%${term}%`)
-          .limit(10)
-      );
-
-      // Search people (profiles)
-      searchPromises.push(
-        supabase
-          .from("profiles")
-          .select("id, full_name, email, role, organization_id, department")
-          .eq("organization_id", user.organization_id || "")
-          .ilike("full_name", `%${term}%`)
-          .limit(10)
-      );
-
-      // Search evidence records
-      searchPromises.push(
-        supabase
-          .from("evidence_records")
-          .select(
-             `id, title, evidence_type, created_at, project_id, task_id, uploader_id`
-           )
-           .in(
-             "project_id",
-             (
-               await supabase
-                 .from("projects")
-                 .select("id")
-                 .or(`organization_id.in.(${user.organization_ids || []}),id.in.(select project_id from project_members where user_id = ${user.id})`)
-             ).data || []
-           )
-          .ilike("title", `%${term}%`)
-          .limit(10)
-      );
-
-      // Search approvals
-      searchPromises.push(
-        supabase
-          .from("approvals")
-          .select(
-            `id, title, item_type, status, requested_at, project_id, requested_by`
-          )
-           .ilike("title", `%${term}%`)
-          .limit(5)
-      );
-
-      const [projects, tasks, people, evidence, approvals] = await Promise.all(searchPromises);
+      const needle = term.toLowerCase();
+      const matches = (value: unknown) => String(value || "").toLowerCase().includes(needle);
 
       const searchResults = {
-        projects: projects || [],
-        tasks: tasks || [],
-        people: people || [],
-        evidence: evidence || [],
-        approvals: approvals || [],
+        projects: (projectResult.data || []).filter((p: any) =>
+          matches(p.project_name) || matches(p.project_code) || matches(p.client_name) || matches(p.description)
+        ).slice(0, 10),
+        tasks: (taskResult.data || []).filter((t: any) =>
+          matches(t.description) || matches(t.task_title) || matches(t.title)
+        ).slice(0, 10),
+        people: (peopleResult.data || []).filter((p: any) =>
+          matches(p.full_name) || matches(p.email)
+        ).slice(0, 10),
+        approvals: (approvalResult.data || []).filter((a: any) =>
+          matches(a.title) || matches(a.status) || matches(a.item_type)
+        ).slice(0, 10),
       };
 
       setResults(searchResults);
@@ -165,7 +106,7 @@ function GlobalSearch() {
         if (projectId) navigate(`/projects/${projectId}?tab=tasks`);
         break;
       case "people":
-        navigate(`/people/${id}`);
+        // No dedicated people route exists in the recovered application.
         break;
       case "evidence":
         navigate(`/projects/${projectId}?tab=evidence`);
@@ -221,7 +162,7 @@ function GlobalSearch() {
                         onClick={() => navigateToEntity(type, item.id, item.project_id)}
                       >
                         <div style={styles.cardContent}>
-                          <div style={{ fontWeight: 600, marginBottom: "4px" }}>{item.title || item.project_name || item.task_title || item.full_name}</div>
+                          <div style={{ fontWeight: 600, marginBottom: "4px" }}>{item.title || item.project_name || item.task_title || item.description || item.full_name}</div>
                           <div style={{ fontSize: "13px", color: "#6B7280", marginBottom: "8px" }}>
                             {item.project_code || item.client_name || item.role || item.evidence_type || item.status}
                           </div>

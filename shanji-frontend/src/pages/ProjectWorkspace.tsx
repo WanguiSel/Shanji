@@ -5,6 +5,7 @@ import type { Project } from "../types";
 import { useProject } from "../contexts/ProjectContext";
 import { HealthIndicator } from "../components/HealthIndicator";
 import { StatusBadge } from "../components/StatusBadge";
+import ActivityFeed from "../features/activity/ActivityFeed";
 
 function projectHealth(project: any): string {
   if (project?.health) return project.health;
@@ -109,6 +110,10 @@ function ProjectWorkspace() {
           <InfoCard label="Budget" value={live.budget_amount ? `${live.currency || 'KES'} ${Number(live.budget_amount).toLocaleString()}` : project.budget ? `${project.currency} ${project.budget.toLocaleString()}` : '—'} />
           <InfoCard label="Description" value={project.description?.slice(0, 80) || '—'} />
         </div>
+      </div>
+      <div style={{ marginTop: '24px' }}>
+        <h2 style={{ fontSize: '18px', fontWeight: 600, marginBottom: '12px' }}>Project Activity</h2>
+        <ActivityFeed projectId={project.id} />
       </div>
     </div>
   );

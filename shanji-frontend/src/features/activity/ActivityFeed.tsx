@@ -34,9 +34,7 @@ export default function ActivityFeed({ projectId }: ActivityFeedProps) {
       try {
         const { data, error } = await supabase
           .from("activity_logs")
-          .select(
-            "id, project_id, actor_id, action, entity_type, entity_id, description, created_at"
-          )
+          .select("*")
           .eq("project_id", projectId)
           .order("created_at", { ascending: false });
 
@@ -77,7 +75,7 @@ export default function ActivityFeed({ projectId }: ActivityFeedProps) {
       {activities.map((activity) => (
         <Card key={activity.id}>
           <div className="activity-item">
-            <div className="activity-description">{activity.description}</div>
+            <div className="activity-description">{activity.description || activity.action}</div>
             <div className="activity-timestamp">
               {new Date(activity.created_at).toLocaleString()}
             </div>

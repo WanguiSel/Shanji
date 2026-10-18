@@ -6,6 +6,7 @@ import { Card, StatCard } from "../../components/Card";
 import { Loading, EmptyState } from "../../components/Loading";
 import { Modal } from "../../components/Modal";
 import { useToast } from "../../hooks/useToast";
+import { logProjectActivity } from "../../lib/activityLog";
 import type { Expense, Budget, Payment, Fund, FinanceApproval } from "../../types";
 
 const EXPENSE_CATEGORIES = [
@@ -62,7 +63,10 @@ function FinancePage() {
     try {
       const [expR, budR, payR, fundR, appR] = await Promise.all([
         supabase.from("expenses").select("*").eq("project_id", id).order("created_at", { ascending: false }),
-        supabase.from("budgets").select("*").eq("project_id", id),
+        supabase.from("budgets").select("*").eq("project_id", id).then(async (res) => {
+          if (!res.error) return res;
+          return supabase.from("budgets").select("*");
+        }),
         supabase.from("payments").select("*").eq("project_id", id).order("created_at", { ascending: false }),
         supabase.from("funds").select("*").eq("project_id", id).order("date_received", { ascending: false }),
         supabase.from("finance_approvals").select("*").eq("project_id", id).order("submitted_at", { ascending: false }),
@@ -80,16 +84,12 @@ function FinancePage() {
   }
 
   async function logActivity(action: string, description: string, entityType: string, entityId?: string) {
-    if (!id || !user?.id) return;
-    await supabase.from("activity_logs").insert({
-      project_id: id, actor_id: user.id, action, entity_type: entityType,
-      entity_id: entityId || null, description, metadata: {},
-    }).then(({ error }) => { if (error) console.error("Activity log failed:", error); });
+    await logProjectActivity(id || "", user?.id, action, description, entityType, entityId || "");
   }
 
   async function createExpense() {
     if (!id || !formTitle.trim() || !formAmount) return;
-    const { data, error } = await supabase.from("expenses").insert({
+    const rich = await supabase.from("expenses").insert({
       project_id: id,
       task_id: formTaskId || null,
       expense_category: formCategory,
@@ -102,23 +102,50 @@ function FinancePage() {
       receipt_filename: formReceipt?.split("/").pop() || null,
       approval_status: "pending",
     }).select().single();
+
+    let data: any = rich.data;
+    let error: any = rich.error;
+    if (error) {
+      // Live schema: category/status are the authoritative expense fields.
+      const live = await supabase.from("expenses").insert({
+        project_id: id,
+        category: formCategory,
+        amount: parseFloat(formAmount),
+        currency: formCurrency,
+        expense_date: formDate || new Date().toISOString().split("T")[0],
+        submitted_by: user?.id || null,
+        description: [formTitle.trim(), formDesc].filter(Boolean).join(" — "),
+        status: "pending",
+      }).select().single();
+      data = live.data;
+      error = live.error;
+    }
+
     if (!error) {
       showToast("success", "Expense created");
-      await logActivity("expense_created", `Expense "${formTitle.trim()}" submitted for ${formCategory}`, "expense", data.id);
+      await logActivity("expense_created", `Expense "${formTitle.trim()}" submitted for ${formCategory}`, "expense", data?.id);
       setShowCreate(false);
       resetForm();
       loadData();
     } else {
-      showToast("error", "Failed to create expense");
+      showToast("error", error?.message || "Failed to create expense");
     }
   }
 
   async function approveExpense(expenseId: string, approve: boolean) {
-    const { error } = await supabase.from("expenses").update({
+    const rich = await supabase.from("expenses").update({
       approval_status: approve ? "approved" : "rejected",
       approved_by: user?.id,
       approved_at: new Date().toISOString(),
     }).eq("id", expenseId);
+
+    let error: any = rich.error;
+    if (error) {
+      const live = await supabase.from("expenses").update({
+        status: approve ? "approved" : "rejected",
+      }).eq("id", expenseId);
+      error = live.error;
+    }
     if (!error) {
       showToast("success", approve ? "Expense approved" : "Expense rejected");
       await logActivity(approve ? "expense_approved" : "expense_rejected", `Expense ${approve ? "approved" : "rejected"}`, "expense", expenseId);
@@ -126,7 +153,7 @@ function FinancePage() {
       setApproveComment("");
       loadData();
     } else {
-      showToast("error", "Failed to update expense");
+      showToast("error", error.message || "Failed to update expense");
     }
   }
 
@@ -228,14 +255,14 @@ function FinancePage() {
     setFormReceipt(""); setFormTaskId("");
   }
 
-  const totalBudget = budgets.reduce((s, b) => s + (b.amount || 0), 0);
-  const totalSpent = expenses.reduce((s, e) => s + (e.amount || 0), 0);
-  const totalPaid = payments.reduce((s, p) => s + (p.amount || 0), 0);
-  const totalFunds = funds.reduce((s, f) => s + (f.amount || 0), 0);
+  const totalBudget = budgets.reduce((s, b) => s + Number((b as any).amount ?? (b as any).allocated_amount ?? 0), 0);
+  const totalSpent = expenses.reduce((s, e) => s + Number(e.amount || 0), 0);
+  const totalPaid = payments.reduce((s, p) => s + Number(p.amount || 0), 0);
+  const totalFunds = funds.reduce((s, f) => s + Number(f.amount || 0), 0);
   const remaining = totalBudget - totalSpent;
-  const pendingExpenses = expenses.filter((e) => e.approval_status === "pending");
-  const approvedExpenses = expenses.filter((e) => e.approval_status === "approved");
-  const rejectedExpenses = expenses.filter((e) => e.approval_status === "rejected");
+  const pendingExpenses = expenses.filter((e) => ((e as any).approval_status ?? (e as any).status) === "pending");
+  const approvedExpenses = expenses.filter((e) => ((e as any).approval_status ?? (e as any).status) === "approved");
+  const rejectedExpenses = expenses.filter((e) => ((e as any).approval_status ?? (e as any).status) === "rejected");
   const pendingPayments = payments.filter((p) => p.status === "pending");
   const completedPayments = payments.filter((p) => p.status === "completed");
   const failedPayments = payments.filter((p) => p.status === "failed");
@@ -246,7 +273,7 @@ function FinancePage() {
   const reconciledFunds = funds.filter((f) => f.status === "reconciled");
   const categorySpending = EXPENSE_CATEGORIES.map((cat) => ({
     category: cat,
-    spent: expenses.filter((e) => e.expense_category === cat).reduce((s, e) => s + (e.amount || 0), 0),
+    spent: expenses.filter((e) => ((e as any).expense_category ?? (e as any).category) === cat).reduce((s, e) => s + Number(e.amount || 0), 0),
   })).filter((c) => c.spent > 0).sort((a, b) => b.spent - a.spent);
 
   if (loading) return <Loading />;
@@ -308,13 +335,14 @@ function FinancePage() {
         ) : (
           <div style={styles.grid}>
             {budgets.map((b) => {
-              const spent = expenses.filter((e) => e.expense_category === b.category).reduce((s, e) => s + (e.amount || 0), 0);
-              const pct = b.amount > 0 ? Math.round((spent / b.amount) * 100) : 0;
+              const budgetAmount = Number((b as any).amount ?? (b as any).allocated_amount ?? 0);
+              const spent = expenses.filter((e) => ((e as any).expense_category ?? (e as any).category) === b.category).reduce((s, e) => s + Number(e.amount || 0), 0);
+              const pct = budgetAmount > 0 ? Math.round((spent / budgetAmount) * 100) : 0;
               return (
                 <Card key={b.id}>
                   <div style={{ fontWeight: 600, marginBottom: "8px" }}>{b.category}</div>
                   <div style={{ display: "flex", justifyContent: "space-between", fontSize: "14px", marginBottom: "8px" }}>
-                    <span>{formCurrency || "KES"} {b.amount.toLocaleString()}</span>
+                    <span>{formCurrency || "KES"} {budgetAmount.toLocaleString()}</span>
                     <span>{formCurrency || "KES"} {spent.toLocaleString()}</span>
                   </div>
                   <div style={{ height: "6px", background: "#E5E7EB", borderRadius: "3px" }}>
@@ -337,7 +365,8 @@ function FinancePage() {
           <div style={styles.grid}>
             {categorySpending.map((c) => {
               const budget = budgets.find((b) => b.category === c.category);
-              const pct = budget && budget.amount > 0 ? Math.round((c.spent / budget.amount) * 100) : 0;
+              const budgetAmount = Number((budget as any)?.amount ?? (budget as any)?.allocated_amount ?? 0);
+              const pct = budgetAmount > 0 ? Math.round((c.spent / budgetAmount) * 100) : 0;
               return (
                 <Card key={c.category}>
                   <div style={{ fontWeight: 600, marginBottom: "4px" }}>{c.category}</div>
@@ -372,21 +401,21 @@ function FinancePage() {
               <tbody>
                 {expenses.map((e) => (
                   <tr key={e.id} style={styles.tr}>
-                    <td style={styles.td}>{e.expense_category || "Other"}</td>
+                    <td style={styles.td}>{(e as any).expense_category || (e as any).category || "Other"}</td>
                     <td style={{ ...styles.td, maxWidth: "200px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.description || "—"}</td>
-                    <td style={{ ...styles.td, fontWeight: 600 }}>{formCurrency || "KES"} {(e.amount || 0).toLocaleString()}</td>
-                    <td style={styles.td}>{e.expense_date}</td>
+                    <td style={{ ...styles.td, fontWeight: 600 }}>{formCurrency || "KES"} {Number(e.amount || 0).toLocaleString()}</td>
+                    <td style={styles.td}>{(e as any).expense_date || (e as any).created_at?.slice(0, 10)}</td>
                     <td style={styles.td}>
                       <span style={{
                         padding: "4px 8px", borderRadius: "4px", fontSize: "12px",
-                        background: e.approval_status === "approved" ? "#ECFDF5" : e.approval_status === "rejected" ? "#FEF2F2" : "#F3F4F6",
-                        color: e.approval_status === "approved" ? "#059669" : e.approval_status === "rejected" ? "#DC2626" : "#D97706",
+                        background: ((e as any).approval_status ?? (e as any).status) === "approved" ? "#ECFDF5" : ((e as any).approval_status ?? (e as any).status) === "rejected" ? "#FEF2F2" : "#F3F4F6",
+                        color: ((e as any).approval_status ?? (e as any).status) === "approved" ? "#059669" : ((e as any).approval_status ?? (e as any).status) === "rejected" ? "#DC2626" : "#D97706",
                       }}>
-                        {e.approval_status}
+                        {(e as any).approval_status ?? (e as any).status}
                       </span>
                     </td>
                     <td style={styles.td}>
-                      {e.approval_status === "pending" && (hasRole("project_manager") || hasRole("finance")) && (
+                      {((e as any).approval_status ?? (e as any).status) === "pending" && (hasRole("project_manager") || hasRole("finance")) && (
                         <button className="btn btn-sm btn-secondary" onClick={() => { setShowApprove(e.id); setApproveComment(""); }}>Review</button>
                       )}
                     </td>

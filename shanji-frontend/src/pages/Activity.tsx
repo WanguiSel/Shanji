@@ -10,8 +10,14 @@ function ActivityPage() {
   useEffect(() => { loadEvents(); }, []);
 
   async function loadEvents() {
-    const { data } = await supabase.from("audit_logs").select("*").order("created_at", { ascending: false }).limit(100);
-    setEvents((data || []) as any[]);
+    const [activityResult, auditResult] = await Promise.all([
+      supabase.from("activity_logs").select("*").order("created_at", { ascending: false }).limit(100),
+      supabase.from("audit_logs").select("*").order("created_at", { ascending: false }).limit(100),
+    ]);
+    const merged = [...(activityResult.data || []), ...(auditResult.data || [])]
+      .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+      .slice(0, 100);
+    setEvents(merged);
     setLoading(false);
   }
 
