@@ -65,15 +65,13 @@ function Projects(){
       return
     }
 
-    const { data, error: insertError } = await supabase
+    const { error: insertError } = await supabase
       .from("projects")
       .insert({
         organization_id: profile.organization_id,
         project_name: trimmed,
         status: "Planning"
       })
-      .select()
-      .single()
     setSaving(false)
     if(insertError){
       // RLS rejections carry code 42501
