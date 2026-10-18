@@ -41,9 +41,37 @@ function Projects(){
       return
     }
     setSaving(true)
+
+    // Resolve the organization from the signed-in user's profile
+    const { data: profile, error: profileError } = await supabase
+      .from("Profiles")
+      .select("organization_id")
+      .eq("id", user.id)
+      .maybeSingle()
+
+    if(profileError){
+      setSaving(false)
+      setError("Could not load your profile: " + profileError.message)
+      return
+    }
+    if(!profile){
+      setSaving(false)
+      setError("No profile found for your account. Contact an administrator.")
+      return
+    }
+    if(!profile.organization_id){
+      setSaving(false)
+      setError("Your profile has no organization assigned. Contact an administrator.")
+      return
+    }
+
     const { data, error: insertError } = await supabase
       .from("projects")
-      .insert({ project_name: trimmed, status: "Planning" })
+      .insert({
+        organization_id: profile.organization_id,
+        project_name: trimmed,
+        status: "Planning"
+      })
       .select()
       .single()
     setSaving(false)
@@ -57,7 +85,7 @@ function Projects(){
       return
     }
     setName("")
-    setProjects(prev => [data, ...prev])
+    await loadProjects()
   }
 
 
