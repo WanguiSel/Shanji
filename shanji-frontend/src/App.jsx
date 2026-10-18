@@ -6,6 +6,8 @@ import Dashboard from "./pages/Dashboard"
 import ProjectWorkspace from "./pages/ProjectWorkspace"
 import MainLayout from "./layouts/MainLayout"
 import Projects from "./pages/Projects"
+import ProtectedRoute from "./components/ProtectedRoute"
+import NotFound from "./pages/NotFound"
 
 
 function App() {
@@ -22,9 +24,12 @@ function App() {
 
         <Route 
           path="/role"
-          element={<RoleSelection />}
-        />
+          element={<ProtectedRoute />}
+        >
+          <Route index element={<RoleSelection />} />
+        </Route>
 
+        <Route element={<ProtectedRoute />}>
         <Route element={<MainLayout />}>
 
           <Route 
@@ -42,7 +47,14 @@ function App() {
             element={<ProjectWorkspace />}
           />
 
+          <Route path="/workplans" element={<NotFound notImplemented />} />
+          <Route path="/risks" element={<NotFound notImplemented />} />
+          <Route path="/reports" element={<NotFound notImplemented />} />
+
         </Route>
+        </Route>
+
+        <Route path="*" element={<NotFound />} />
 
       </Routes>
 
