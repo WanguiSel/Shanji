@@ -22,11 +22,22 @@ function ProjectWorkspace() {
   const { setCurrentProject } = useProject();
   const [project, setProject] = useState<Project | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const loadProject = useCallback(async () => {
-    if (!id) return;
-    const { data } = await supabase.from("projects").select("*").eq("id", id).single();
-    if (data) {
+    if (!id) {
+      setLoadError('No project id provided.');
+      setLoading(false);
+      return;
+    }
+    const { data, error: queryError } = await supabase
+      .from("projects")
+      .select("*")
+      .eq("id", id)
+      .maybeSingle();
+    if (queryError) {
+      setLoadError(queryError.message);
+    } else if (data) {
       setProject(data as Project);
       setCurrentProject(data as Project);
     }
@@ -35,7 +46,19 @@ function ProjectWorkspace() {
 
   useEffect(() => { loadProject(); }, [loadProject]);
 
-  if (loading || !project) return <div style={{ padding: '40px' }}>Loading project...</div>;
+  if (loading) return <div style={{ padding: '40px' }}>Loading project...</div>;
+  if (loadError) return (
+    <div style={{ padding: '40px' }}>
+      <p style={{ color: '#DC2626' }}>Could not load project: {loadError}</p>
+      <button onClick={() => navigate('/projects')} className="btn btn-secondary">← Back to Projects</button>
+    </div>
+  );
+  if (!project) return (
+    <div style={{ padding: '40px' }}>
+      <p>Project not found, or you do not have access to it.</p>
+      <button onClick={() => navigate('/projects')} className="btn btn-secondary">← Back to Projects</button>
+    </div>
+  );
 
   const live = project as any;
   const managerId = live.project_manager_id || live.pm_user_id;

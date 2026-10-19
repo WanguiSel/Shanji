@@ -40,18 +40,40 @@ function Projects() {
     if (!newProject.name.trim() || saving) return;
     setSaving(true);
 
-    // The live project INSERT policy requires the signed-in user's organization.
-    const organizationId = user?.organization_id
-      || (profile?.organization_id as string | undefined);
-
     if (!user) {
       setSaving(false);
       setError('You are not signed in. Please sign in again.');
       return;
     }
+
+    // The live project INSERT policy requires the signed-in user's organization.
+    // Prefer the session context, then fall back to a fresh Profiles read.
+    // (Ports cline/v2wjcd9d ea4c804 "organization_id from Profiles".)
+    let organizationId = user.organization_id
+      || (profile?.organization_id as string | undefined);
+
+    if (!organizationId) {
+      const { data: liveProfile, error: profileError } = await supabase
+        .from("Profiles")
+        .select("organization_id")
+        .eq("id", user.id)
+        .maybeSingle();
+
+      if (profileError) {
+        setSaving(false);
+        setError("Could not load your profile: " + profileError.message);
+        return;
+      }
+      if (!liveProfile) {
+        setSaving(false);
+        setError("No profile found for your account. Contact an administrator.");
+        return;
+      }
+      organizationId = (liveProfile as { organization_id?: string | null }).organization_id ?? undefined;
+    }
     if (!organizationId) {
       setSaving(false);
-      setError('No organization is assigned to your profile. Contact an administrator.');
+      setError('Your profile has no organization assigned. Contact an administrator.');
       return;
     }
 
@@ -67,7 +89,7 @@ function Projects() {
     if (insertError) {
       setError(
         insertError.code === '42501'
-          ? `Permission denied by database policy: ${insertError.message}`
+          ? `Permission denied by database policy: your account is not allowed to create projects (check your profile, role and organization). ${insertError.message}`
           : insertError.message
       );
       return;
