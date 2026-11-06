@@ -79,7 +79,7 @@ function Dashboard() {
   if (error) return <EmptyState title="Dashboard Error" message={error} />;
   return (
     <CommandCentre
-      role={(profile as any)?.role || ""}
+      role={user?.role || ""}
       projects={projects}
       tasks={tasks}
       risks={risks}

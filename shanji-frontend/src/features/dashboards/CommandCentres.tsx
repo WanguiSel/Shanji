@@ -34,21 +34,20 @@ function Section({ title, children }: { title: string; children: any }) {
 export function CommandCentre(props: CommandCentreProps) {
   const { role } = props;
   switch (role) {
-    case "finance":
+    case "Finance Officer":
       return <FinanceCentre {...props} />;
-    case "procurement":
+    case "Procurement Officer":
       return <ProcurementCentre {...props} />;
-    case "ohs":
+    case "OHS Officer":
       return <OHSCentre {...props} />;
-    case "site_supervisor":
+    case "Site Supervisor":
       return <SiteCentre {...props} />;
-    case "me":
+    case "M&E Officer":
       return <MECentre {...props} />;
-    case "project_assistant":
+    case "Assistant Project Manager":
       return <AssistantCentre {...props} />;
-    case "admin":
-    case "ceo":
-    case "director":
+    case "Organization Admin":
+    case "CEO / Director":
       return <ExecutiveCentre {...props} />;
     default:
       return <PMCentre {...props} />;
