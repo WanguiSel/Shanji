@@ -3,6 +3,7 @@ import { useParams } from "react-router-dom";
 import { supabase } from "../../lib/supabase";
 import { Card } from "../../components/Card";
 import { Loading, EmptyState } from "../../components/Loading";
+import { useAuth } from "../../contexts/AuthContext";
 import { useToast } from "../../hooks/useToast";
 
 function MEPage() {
