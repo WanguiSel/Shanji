@@ -38,11 +38,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       .maybeSingle();
 
     const metadata = sessionUser.user_metadata || {};
-    const storedRole = typeof window !== "undefined" ? window.localStorage.getItem(ROLE_STORAGE_KEY) : null;
-    const role = (profileData?.role as string | undefined)
-      || (metadata.role as string | undefined)
-      || storedRole
-      || "member";
+    const { data: roleData } = await supabase
+      .from("User_roles")
+      .select("role_id, Roles(name)")
+      .eq("user_id", sessionUser.id)
+      .limit(1)
+      .maybeSingle();
+
+    const dbRole = (roleData as any)?.Roles?.name as string | undefined;
+    const role = dbRole || (profileData?.role as string | undefined) || "member";
 
     setProfile((profileData as Record<string, unknown> | null) ?? null);
     setUser({
