@@ -13,7 +13,7 @@ function Login() {
   const [isRegister, setIsRegister] = useState(false);
 
   useEffect(() => {
-    if (user) navigate("/role", { replace: true });
+    if (user) navigate("/dashboard", { replace: true });
   }, [user, navigate]);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -24,11 +24,11 @@ function Login() {
       if (isRegister) {
         const { error: authError } = await signUp(email, password, fullName);
         if (authError) { setError(authError.message); setLoading(false); return; }
-        navigate("/role");
+        navigate("/dashboard");
       } else {
         const { error: authError } = await signIn(email, password);
         if (authError) { setError(authError.message); setLoading(false); return; }
-        navigate("/role");
+        navigate("/dashboard");
       }
     } catch {
       setError("An unexpected error occurred.");
