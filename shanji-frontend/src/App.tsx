@@ -28,7 +28,6 @@ import ReportsPage from "./features/reports/ReportsPage"
 import ChangeRequestsPage from "./features/change/ChangeRequestsPage"
 import HandoverPage from "./features/handover/HandoverPage"
 import TimelinePage from "./features/timeline/TimelinePage"
-import MEPage from "./features/me/MEPage"
 import HRPage from "./features/hr/HRPage"
 import ArchivePage from "./features/archive/ArchivePage"
 import DMPage from "./features/dm/DMPage"
@@ -68,7 +67,6 @@ function App() {
               <Route path="/projects/:id/reports" element={<ReportsPage />} />
               <Route path="/projects/:id/change-requests" element={<ChangeRequestsPage />} />
               <Route path="/projects/:id/handover" element={<HandoverPage />} />
-              <Route path="/projects/:id/me" element={<MEPage />} />
               <Route path="/projects/:id/team" element={<TeamPage />} />
               <Route path="/projects/:id/notifications" element={<NotificationsPage />} />
               <Route path="/notifications" element={<NotificationsPage />} />
