@@ -3,6 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabase";
 import type { Project } from "../types";
 import { useProject } from "../contexts/ProjectContext";
+import { useToast } from "../hooks/useToast";
 import { HealthIndicator } from "../components/HealthIndicator";
 import { StatusBadge } from "../components/StatusBadge";
 import ActivityFeed from "../features/activity/ActivityFeed";
@@ -20,6 +21,7 @@ function ProjectWorkspace() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { setCurrentProject } = useProject();
+  const { showToast } = useToast();
   const [project, setProject] = useState<Project | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -83,7 +85,24 @@ function ProjectWorkspace() {
     { key: "changes", label: "Changes", slug: "change-requests" },
     { key: "comments", label: "Comments", slug: "comments" },
     { key: "handover", label: "Handover", slug: "handover" },
+    { key: "me", label: "M&E", slug: "me" },
+    { key: "team", label: "Team", slug: "team" },
   ];
+
+  async function archiveProject() {
+    if (!id) return;
+    const { error } = await supabase.rpc("archive_project", { p_project_id: id });
+    if (error) { showToast("error", error.message); return; }
+    showToast("success", "Project archived");
+    loadProject();
+  }
+  async function restoreProject() {
+    if (!id) return;
+    const { error } = await supabase.rpc("restore_project", { p_project_id: id });
+    if (error) { showToast("error", error.message); return; }
+    showToast("success", "Project restored");
+    loadProject();
+  }
 
   const openTab = (slug: string) => {
     if (!slug) return;
@@ -110,6 +129,10 @@ function ProjectWorkspace() {
           <div><div style={{ fontSize: '11px', color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Readiness</div><div style={{ fontSize: '24px', fontWeight: 700, color: '#F59E0B' }}>{live.completion_readiness != null ? `${live.completion_readiness}%` : '—'}</div></div>
           <div><div style={{ fontSize: '11px', color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Duration</div><div style={{ fontSize: '24px', fontWeight: 700 }}>{project.start_date && project.end_date ? Math.round((new Date(project.end_date).getTime() - new Date(project.start_date).getTime()) / (1000 * 60 * 60 * 24)) : '—'}d</div></div>
         </div>
+      </div>
+      <div style={{ display: "flex", gap: "8px", marginBottom: "12px" }}>
+        <button className="btn btn-secondary" onClick={archiveProject}>Archive Project</button>
+        <button className="btn btn-secondary" onClick={restoreProject}>Restore Project</button>
       </div>
       <div style={styles.tabsRow}>
         {tabs.map((tab) => (

@@ -18,6 +18,9 @@ import ProcurementPage from "./features/procurement/ProcurementPage"
 import FinancePage from "./features/finance/FinancePage"
 import EvidencePage from "./features/evidence/EvidencePage"
 import SitePage from "./features/site/SitePage"
+import MEPage from "./features/me/MEPage"
+import TeamPage from "./features/team/TeamPage"
+import MessagesPage from "./features/messages/MessagesPage"
 import HSEQPage from "./features/hseq/HSEQPage"
 import DocumentsPage from "./features/documents/DocumentsPage"
 import NotificationsPage from "./features/notifications/NotificationsPage"
@@ -58,10 +61,13 @@ function App() {
               <Route path="/projects/:id/reports" element={<ReportsPage />} />
               <Route path="/projects/:id/change-requests" element={<ChangeRequestsPage />} />
               <Route path="/projects/:id/handover" element={<HandoverPage />} />
+              <Route path="/projects/:id/me" element={<MEPage />} />
+              <Route path="/projects/:id/team" element={<TeamPage />} />
               <Route path="/projects/:id/notifications" element={<NotificationsPage />} />
               <Route path="/notifications" element={<NotificationsPage />} />
               <Route path="/search" element={<GlobalSearch />} />
               <Route path="/activity" element={<ActivityPage />} />
+              <Route path="/messages" element={<MessagesPage />} />
               <Route path="*" element={<NotFound />} />
             </Route>
           </Route>
