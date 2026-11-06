@@ -30,12 +30,20 @@ function EvidencePage() {
 
   async function loadEvidence() {
     if (!id) return;
+    setLoading(true);
+    setError(null);
     try {
-      const { data } = await supabase.from("evidence_records").select("*").eq("project_id", id).order("created_at", { ascending: false });
+      const { data, error } = await supabase.from("evidence_records").select("*").eq("project_id", id).order("created_at", { ascending: false });
+      if (error) {
+        setError(error.message || "Failed to load evidence");
+        setEvidence([]);
+        return;
+      }
       setEvidence((data || []) as EvidenceRecord[]);
       await loadSignedUrls(data || []);
     } catch (e) {
-      setError("Failed to load evidence");
+      setError(e instanceof Error ? e.message : "Failed to load evidence");
+      setEvidence([]);
     } finally {
       setLoading(false);
     }
@@ -104,7 +112,11 @@ function EvidencePage() {
     }).select().single();
 
     if (dbError) {
-      showToast("error", "Failed to save evidence record");
+      const { error: cleanupError } = await supabase.storage.from(EVIDENCE_BUCKET).remove([filePath]);
+      const message = cleanupError
+        ? `${dbError.message}; storage cleanup also failed: ${cleanupError.message}`
+        : dbError.message;
+      showToast("error", message || "Failed to save evidence record");
       return;
     }
 
@@ -124,6 +136,14 @@ function EvidencePage() {
     if (!hasRole("project_manager") && !hasRole("admin")) {
       showToast("error", "Only project managers can delete evidence");
       return;
+    }
+    const record = evidence.find((e) => e.id === evId);
+    if (record?.file_path) {
+      const { error: storageError } = await supabase.storage.from(EVIDENCE_BUCKET).remove([record.file_path]);
+      if (storageError) {
+        showToast("error", `Storage cleanup failed: ${storageError.message}`);
+        return;
+      }
     }
     const { error } = await supabase.from("evidence_records").delete().eq("id", evId);
     if (!error) {
@@ -170,6 +190,9 @@ function EvidencePage() {
       {error && (
         <Card>
           <EmptyState title="Error" message={error} />
+          <div style={{ marginTop: "12px" }}>
+            <button className="btn btn-secondary" onClick={loadEvidence}>Retry</button>
+          </div>
         </Card>
       )}
 

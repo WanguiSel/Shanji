@@ -25,6 +25,10 @@ import ReportsPage from "./features/reports/ReportsPage"
 import ChangeRequestsPage from "./features/change/ChangeRequestsPage"
 import HandoverPage from "./features/handover/HandoverPage"
 import TimelinePage from "./features/timeline/TimelinePage"
+import MEPage from "./features/me/MEPage"
+import HRPage from "./features/hr/HRPage"
+import ArchivePage from "./features/archive/ArchivePage"
+import DMPage from "./features/dm/DMPage"
 import GlobalSearch from "./features/search/GlobalSearch"
 import ActivityPage from "./pages/Activity"
 import ProjectComments from "./pages/ProjectComments"
@@ -52,7 +56,10 @@ function App() {
               <Route path="/projects/:id/finance" element={<FinancePage />} />
               <Route path="/projects/:id/evidence" element={<EvidencePage />} />
               <Route path="/projects/:id/site" element={<SitePage />} />
-              <Route path="/projects/:id/hseq" element={<HSEQPage />} />
+              <Route path="/projects/:id/me" element={<MEPage />} />
+              <Route path="/projects/:id/hr" element={<HRPage />} />
+              <Route path="/projects/:id/archive" element={<ArchivePage />} />
+              <Route path="/projects/:id/dm" element={<DMPage />} />
               <Route path="/projects/:id/documents" element={<DocumentsPage />} />
               <Route path="/projects/:id/comments" element={<ProjectComments />} />
               <Route path="/projects/:id/reports" element={<ReportsPage />} />

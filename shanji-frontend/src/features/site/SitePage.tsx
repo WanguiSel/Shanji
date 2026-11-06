@@ -2,12 +2,14 @@ import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { supabase } from "../../lib/supabase";
 import { Card } from "../../components/Card";
-import { Loading, EmptyState } from "../../components/Loading";
 import { useToast } from "../../hooks/useToast";
+import { Loading, EmptyState } from "../../components/Loading";
+import { useAuth } from "../../contexts/AuthContext";
 import type { SiteReport } from "../../types";
 
 function SitePage() {
   const { id } = useParams<{ id: string }>();
+  const { user } = useAuth();
   const [reports, setReports] = useState<SiteReport[]>([]);
   const [loading, setLoading] = useState(true);
   const { toasts, showToast } = useToast();
@@ -16,23 +18,30 @@ function SitePage() {
 
   async function loadReports() {
     if (!id) return;
-    const { data } = await supabase.from("site_reports").select("*").eq("project_id", id).order("report_date", { ascending: false });
-    setReports((data || []) as SiteReport[]);
+    const { data, error } = await supabase.from("site_reports").select("*").eq("project_id", id).order("report_date", { ascending: false });
+    if (error) {
+      showToast("error", error.message || "Failed to load site reports");
+      setReports([]);
+    } else {
+      setReports((data || []) as SiteReport[]);
+    }
     setLoading(false);
   }
 
   async function createReport() {
-    if (!id) return;
-    const { data } = await supabase.from("site_reports").insert({
+    if (!id || !user?.id) return;
+    const { data, error } = await supabase.from("site_reports").insert({
       project_id: id,
       report_date: new Date().toISOString().split('T')[0],
-      reported_by: 'user-id',
-      work_completed: 'Site work completed',
+      reported_by: user.id,
+      work_completed: "Site work completed",
     }).select().single();
-    if (!data.error) {
-      showToast("success", "Site report created");
-      loadReports();
+    if (error) {
+      showToast("error", error.message || "Failed to create site report");
+      return;
     }
+    showToast("success", "Site report created");
+    loadReports();
   }
 
   if (loading) return <Loading />;

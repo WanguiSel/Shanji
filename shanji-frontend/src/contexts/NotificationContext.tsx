@@ -17,7 +17,8 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
 
   const refreshUnreadCount = () => {
     if (!user) return;
-    supabase.from('notifications').select('count', { count: 'exact' }).eq('user_id', user.id).eq('is_read', false).then(({ count }) => {
+    supabase.from('notifications').select('count', { count: 'exact' }).eq('user_id', user.id).eq('read', false).then(({ count, error }) => {
+      if (error) { console.error('Failed to load unread count:', error); return; }
       setUnreadCount(count || 0);
     });
   };

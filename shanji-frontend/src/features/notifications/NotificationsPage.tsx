@@ -21,14 +21,23 @@ function NotificationsPage() {
 
   async function loadNotifications() {
     if (!user?.id) return;
-    const { data } = await supabase.from("notifications").select("*").eq("user_id", user.id).order("created_at", { ascending: false });
-    setNotifications((data || []) as Notification[]);
+    const { data, error } = await supabase.from("notifications").select("*").eq("user_id", user.id).order("created_at", { ascending: false });
+    if (error) {
+      showToast("error", error.message || "Failed to load notifications");
+      setNotifications([]);
+    } else {
+      setNotifications((data || []) as Notification[]);
+    }
     setLoading(false);
   }
 
   async function markAllRead() {
     if (!user?.id) return;
-    await supabase.from("notifications").update({ is_read: true }).eq("user_id", user.id).eq("is_read", false);
+    const { error } = await supabase.from("notifications").update({ read: true, read_at: new Date().toISOString() }).eq("user_id", user.id).eq("read", false);
+    if (error) {
+      showToast("error", error.message || "Failed to mark notifications as read");
+      return;
+    }
     showToast("success", "All notifications marked as read");
     loadNotifications();
   }
@@ -52,10 +61,10 @@ function NotificationsPage() {
       ) : (
         <div style={styles.grid}>
           {notifications.map((n) => (
-            <Card key={n.id} style={{ opacity: (n as any).is_read ? 0.7 : 1 }}>
+            <Card key={n.id} style={{ opacity: n.read ? 0.7 : 1 }}>
               <div style={styles.notifHeader}>
                 <span style={{ fontSize: '13px', fontWeight: 600, textTransform: 'uppercase', color: '#6B7280', letterSpacing: '0.05em' }}>{n.type}</span>
-                {!(n as any).is_read && <span style={{ width: '8px', height: '8px', background: '#0D6B4E', borderRadius: '50%' }} />}
+                {!n.read && <span style={{ width: '8px', height: '8px', background: '#0D6B4E', borderRadius: '50%' }} />}
               </div>
               <div style={{ fontWeight: 600, marginTop: '4px' }}>{n.title}</div>
               {n.message && <p style={{ fontSize: '13px', color: '#6B7280', marginTop: '4px' }}>{n.message}</p>}
