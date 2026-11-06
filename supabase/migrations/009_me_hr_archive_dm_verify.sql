@@ -1,0 +1,7 @@
+-- Read-only post-execution verification for 009_me_hr_archive_dm.sql
+SELECT table_name FROM information_schema.tables WHERE table_schema='public' AND table_name IN ('indicator_categories','indicator_measurements','organization_invitations','role_change_history','organization_settings','dm_conversations','dm_participants','dm_messages','archive_audit');
+SELECT proname FROM pg_proc WHERE pronamespace='public'::regnamespace AND proname IN ('enforce_content_edit','guard_measurement_verification','prevent_role_history_mutation','enforce_dm_participants','create_dm_conversation','is_dm_participant','accept_organization_invitation','archive_project','restore_project');
+SELECT tablename, policyname FROM pg_policies WHERE schemaname='public' AND tablename IN ('indicator_categories','indicator_measurements','organization_invitations','role_change_history','organization_settings','dm_conversations','dm_participants','dm_messages','archive_audit');
+SELECT conname, conrelid::regclass, pg_get_constraintdef(oid) FROM pg_constraint WHERE conrelid IN ('public.indicator_measurements'::regclass,'public.dm_participants'::regclass,'public.organization_invitations'::regclass);
+SELECT tgname, tgrelid::regclass FROM pg_trigger WHERE tgrelid IN ('public.indicator_measurements'::regclass,'public.dm_participants'::regclass,'public.role_change_history'::regclass);
+SELECT r.name, COUNT(*) FROM public.project_members pm JOIN public."Roles" r ON r.id=pm.role_id GROUP BY r.name ORDER BY r.name;
