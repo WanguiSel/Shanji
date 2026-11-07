@@ -85,12 +85,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const signUp = useCallback(async (email: string, password: string, fullName?: string) => {
-    const { error } = await supabase.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
-      options: { data: { full_name: fullName, role: 'member' } },
+      options: { data: { full_name: fullName } },
     });
-    return { error };
+    if (error || !data.user) return { error: error ?? new Error("Sign-up failed") };
+
+    const { error: profileError } = await supabase.from("Profiles").insert({
+      id: data.user.id,
+      email,
+      full_name: fullName ?? null,
+    });
+    if (profileError) {
+      return { error: new Error(`Account created, but profile save failed: ${profileError.message}`) };
+    }
+    return { error: null };
   }, []);
 
   const signOut = useCallback(async () => {
