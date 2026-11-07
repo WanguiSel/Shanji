@@ -1,4 +1,17 @@
--- Consolidated Shanji M&E, HR/Admin, Archive and Private Messaging migration.
+-- RLS for User_roles and Roles (required for role hydration)
+ALTER TABLE public."User_roles" ENABLE ROW LEVEL SECURITY;
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='User_roles' AND policyname='ur_select_self') THEN
+    CREATE POLICY ur_select_self ON public."User_roles" FOR SELECT USING (user_id = auth.uid());
+  END IF;
+END $$;
+
+ALTER TABLE public."Roles" ENABLE ROW LEVEL SECURITY;
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='Roles' AND policyname='roles_select') THEN
+    CREATE POLICY roles_select ON public."Roles" FOR SELECT USING (EXISTS (SELECT 1 FROM public."User_roles" ur WHERE ur.user_id = auth.uid()));
+  END IF;
+END $$;
 -- Review only. Do not execute without approval.
 
 -- (Full corrected SQL as prepared in final technical review.)
